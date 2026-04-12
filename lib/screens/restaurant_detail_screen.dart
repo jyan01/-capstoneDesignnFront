@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/restaurant_provider.dart'; 
+import '../models/restaurant.dart'; 
 
-class RestaurantDetailScreen extends StatelessWidget {
+// 🌟 팀원분의 변경점: 실제 데이터를 불러오기 위해 ConsumerWidget 사용
+class RestaurantDetailScreen extends ConsumerWidget {
   final int restaurantId;
-  // *변경 코드11*
+  // ✨ 개발자님의 변경점: 슬라이드 애니메이션을 위한 조종기와 뒤로가기 버튼 유지!
   final VoidCallback? onBack; 
   final ScrollController? scrollController;
 
@@ -12,7 +16,6 @@ class RestaurantDetailScreen extends StatelessWidget {
     this.onBack,
     this.scrollController,
   });
-  // *여기까지 11번*
 
   Widget _buildTag(String text) {
     return Container(
@@ -37,7 +40,7 @@ class RestaurantDetailScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
-        children:[
+        children: [
           Icon(icon, color: Colors.grey, size: 20),
           const SizedBox(width: 10),
           Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87)),
@@ -46,15 +49,64 @@ class RestaurantDetailScreen extends StatelessWidget {
     );
   }
 
+  // 🌟 팀원분의 변경점: 메뉴 한 줄을 예쁘게 그려주는 위젯
+  Widget _buildMenuItem(MenuItem menu) {
+    final formattedPrice = menu.price.toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              menu.name, 
+              style: const TextStyle(fontSize: 15, color: Colors.black87),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              '..................................................',
+              maxLines: 1,
+              style: TextStyle(color: Colors.black26, letterSpacing: 2),
+              overflow: TextOverflow.clip,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$formattedPrice원', 
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 🌟 팀원분의 변경점: 실제 식당 데이터 찾기 로직
+    final restaurantsAsync = ref.watch(restaurantProvider);
+    final restaurant = restaurantsAsync.value?.firstWhere(
+      (r) => r.id == restaurantId, 
+      orElse: () => const Restaurant(id: -1, name: '에러', category: '', distance: 0, rating: 0, latitude: 0, longitude: 0)
+    );
+
+    if (restaurant == null || restaurant.id == -1) {
+      return const Scaffold(body: Center(child: Text('식당 정보를 불러올 수 없습니다.')));
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
-        // *변경 코드12*
+        // ✨ 개발자님의 변경점: 조종기(scrollController) 연결!
         controller: scrollController, 
-        slivers:[
+        slivers: [
           SliverAppBar(
+            // ✨ 개발자님의 변경점: 뒤로가기 버튼(onBack) 연결!
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black),
               onPressed: onBack,
@@ -68,7 +120,7 @@ class RestaurantDetailScreen extends StatelessWidget {
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
-                children:[
+                children: [
                   Container(
                     color: Colors.orange[100],
                     child: const Icon(Icons.restaurant, size: 80, color: Colors.deepOrange),
@@ -78,18 +130,16 @@ class RestaurantDetailScreen extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
-                        colors:[Colors.black.withOpacity(0.1), Colors.transparent],
+                        colors: [Colors.black.withOpacity(0.1), Colors.transparent],
                       ),
                     ),
                   ),
+                  // ✨ 개발자님의 변경점: 예쁜 바텀시트 손잡이 유지!
                   Positioned(
-                    top: 15,
-                    left: 0,
-                    right: 0,
+                    top: 15, left: 0, right: 0,
                     child: Center(
                       child: Container(
-                        width: 40,
-                        height: 5,
+                        width: 40, height: 5,
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.2), 
                           borderRadius: BorderRadius.circular(10),
@@ -101,31 +151,32 @@ class RestaurantDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-          // *여기까지 12번*
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children:[
+                children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children:[
-                      Text('AI 추천 맛집 $restaurantId', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                      const Row(
-                        children:[
-                          Icon(Icons.star, color: Colors.amber, size: 24),
-                          SizedBox(width: 4),
-                          Text('4.8', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    children: [
+                      // 🌟 팀원분의 변경점: 실제 이름과 별점 연동!
+                      Text(restaurant.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 24),
+                          const SizedBox(width: 4),
+                          Text(restaurant.rating.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('서울 강남구 테헤란로 · 한식 · 0.3km', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                  // 🌟 팀원분의 변경점: 실제 카테고리와 거리 연동!
+                  Text('서울 강남구 · ${restaurant.category} · ${restaurant.distance}km', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
                   const SizedBox(height: 20),
                   Row(
-                    children:[
+                    children: [
                       _buildTag('#가성비갑'),
                       const SizedBox(width: 8),
                       _buildTag('#데이트추천'),
@@ -133,7 +184,36 @@ class RestaurantDetailScreen extends StatelessWidget {
                       _buildTag('#분위기맛집'),
                     ],
                   ),
+                  
                   const SizedBox(height: 30),
+
+                  // 🌟 팀원분의 변경점: 대표 메뉴 리스트 그리기!
+                  const Text('📋 대표 메뉴', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 15),
+                  if (restaurant.menus.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.grey.shade300),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+                        ]
+                      ),
+                      child: Column(
+                        children: restaurant.menus.map((menu) => _buildMenuItem(menu)).toList(),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
+                      child: const Center(child: Text('메뉴 정보가 준비되지 않았습니다.', style: TextStyle(color: Colors.black54))),
+                    ),
+
+                  const SizedBox(height: 30),
+                  
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -143,9 +223,9 @@ class RestaurantDetailScreen extends StatelessWidget {
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children:[
+                      children: [
                         const Row(
-                          children:[
+                          children: [
                             Icon(Icons.auto_awesome, color: Colors.blueAccent),
                             SizedBox(width: 8),
                             Text('AI 리뷰 3줄 요약', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)),
@@ -164,7 +244,7 @@ class RestaurantDetailScreen extends StatelessWidget {
                   _buildInfoRow(Icons.location_on, '서울 강남구 테헤란로 123 1층'),
                   _buildInfoRow(Icons.access_time, '매일 11:00 - 22:00 (라스트오더 21:00)'),
                   _buildInfoRow(Icons.phone, '0507-1234-5678'),
-                  const SizedBox(height: 40), 
+                  const SizedBox(height: 40),
                 ],
               ),
             ),

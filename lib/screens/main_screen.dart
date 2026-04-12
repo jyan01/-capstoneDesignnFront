@@ -5,6 +5,7 @@ import '../widgets/category_item.dart';
 import '../theme/app_colors.dart';
 import '../providers/restaurant_provider.dart';
 import 'restaurant_detail_screen.dart';
+import 'favorite_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -20,8 +21,10 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   bool _isDetailOpen = false;
 
 // *1번 여기까지*
-  final TextEditingController _searchController = TextEditingController();
   final TransformationController _mapController = TransformationController();
+  static const List<String> _searchKeywords = [
+    '강남구 맛집', '강남역 스시', '강남 이자카야', '초밥의 달인', '불맛 짬뽕집', '파스타 공방', '할머니 국밥',
+  ];
 
 // *변경 코드2* 애니메이션 코드 추가, 변수 추가
   // 바텀 시트를 코드로 끌어내리기 위한 컨트롤러
@@ -53,7 +56,6 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
 
   @override
   void dispose() {
-    _searchController.dispose();
     _mapController.dispose();
     // *변경 코드3* 메모리 해제
     _sheetController.dispose();
@@ -409,27 +411,105 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
           ),
 
           // *변경 코드11* 4층 5층 코드 3층 앞으로 이동
-          // 4층: 검색창
+          // 4층: 검색창 (연관 검색어 Autocomplete 적용)
           Positioned(
             top: 60, left: 20, right: 90,
-            child: Container(
-              height: 50, decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(25), boxShadow:[BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]),
-              child: Row(
-                children:[
-                  const SizedBox(width: 15), const Icon(Icons.search, color: AppColors.textSecondary), const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        ref.read(searchQueryProvider.notifier).updateQuery(value);
-                      },
-                      decoration: const InputDecoration(hintText: '음식점, 주소 검색', hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14), border: InputBorder.none),
+            child: Autocomplete<String>(
+              // 1. 검색어 필터링 로직
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return const Iterable<String>.empty();
+                }
+                return _searchKeywords.where((String keyword) {
+                  return keyword.contains(textEditingValue.text); // 입력한 글자가 포함된 단어 찾기
+                });
+              },
+              
+              // 2. 연관 검색어를 클릭했을 때의 동작
+              onSelected: (String selection) {
+                // Riverpod 상태 업데이트 (검색 실행)
+                ref.read(searchQueryProvider.notifier).updateQuery(selection);
+                FocusScope.of(context).unfocus(); // 키보드 내리기
+              },
+              
+              // 3. 기존 검색창 UI 유지
+              fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                return Container(
+                  height: 50, 
+                  decoration: BoxDecoration(
+                    color: AppColors.background, 
+                    borderRadius: BorderRadius.circular(25), 
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 15), 
+                      const Icon(Icons.search, color: AppColors.textSecondary), 
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: textEditingController, // Autocomplete 전용 컨트롤러 사용
+                          focusNode: focusNode,
+                          onChanged: (value) {
+                            // 타이핑할 때마다 Riverpod 상태 업데이트
+                            ref.read(searchQueryProvider.notifier).updateQuery(value);
+                          },
+                          decoration: const InputDecoration(
+                            hintText: '음식점, 주소 검색', 
+                            hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14), 
+                            border: InputBorder.none
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              
+              // 4. 연관 검색어 드롭다운 창 UI 디자인
+              optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8), // 검색창과 살짝 간격 띄우기
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      // 드롭다운 최대 크기 지정 (화면 밖으로 넘어가지 않게)
+                      constraints: BoxConstraints(maxHeight: 200, maxWidth: MediaQuery.of(context).size.width - 110),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final String option = options.elementAt(index);
+                          return InkWell(
+                            onTap: () => onSelected(option),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
+                                  const SizedBox(width: 10),
+                                  Text(option, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
+
 
           // 5층: 성향 버튼
           Positioned(
@@ -443,6 +523,35 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             ),
           ),
           // * 여기까지 11번 코드 순서 변경
+
+          // 찜 목록 버튼 코드
+          Positioned(
+            top: 120, // 성향 버튼(60) + 높이(50) + 간격(10) 해서 120이 딱 좋습니다!
+            right: 20,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (context) => const FavoriteScreen(),
+                ));
+              },
+              child: Container(
+                height: 50, width: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.background, 
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)],
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)), 
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.favorite, color: AppColors.error, size: 20),
+                    Text('찜 목록', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
           // *변경 코드5*
           // 3층: 바텀시트
