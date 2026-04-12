@@ -560,6 +560,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             initialChildSize: 0.45, minChildSize: 0.14, 
             maxChildSize: _isDetailOpen ? 1.0 : 0.87, snap: true, snapSizes: _isDetailOpen ? const [0.14, 0.45, 1.0] : const [0.14, 0.45, 0.87],
             builder: (BuildContext context, ScrollController scrollController) {
+              _listScrollController = scrollController;
               return Container(
                 decoration: BoxDecoration(color: AppColors.background, borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)), boxShadow:[BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, spreadRadius: 2)]),
                 child: ClipRRect(
