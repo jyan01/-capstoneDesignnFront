@@ -102,54 +102,75 @@ class RestaurantDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
-        // ✨ 개발자님의 변경점: 조종기(scrollController) 연결!
+        // scrollController 연결
         controller: scrollController, 
         slivers: [
           SliverAppBar(
-            // ✨ 개발자님의 변경점: 뒤로가기 버튼(onBack) 연결!
+            // 뒤로가기 버튼 연결
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black),
-              onPressed: onBack,
+              onPressed: () {
+                // ✨ [수정] 메인 화면인지, 찜 목록인지 구분해서 뒤로가기 작동!
+                if (onBack != null) {
+                  // 1. 메인 화면에서 열었을 때 (onBack 함수가 전달됨)
+                  onBack!(); // 바텀시트 내리기 등 원래 하던 거 실행!
+                } else {
+                  // 2. 찜 목록 등 다른 화면에서 열었을 때 (onBack 함수가 없음)
+                  Navigator.pop(context); // 진짜 화면을 닫고 이전 화면으로 복귀!
+                }
+              },
             ),
-            expandedHeight: 250.0,
+            expandedHeight: 60.0,
             floating: false,
             pinned: true,
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
             elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(
-                    color: Colors.orange[100],
-                    child: const Icon(Icons.restaurant, size: 80, color: Colors.deepOrange),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Colors.black.withOpacity(0.1), Colors.transparent],
-                      ),
-                    ),
-                  ),
-                  // ✨ 개발자님의 변경점: 예쁜 바텀시트 손잡이 유지!
-                  Positioned(
-                    top: 15, left: 0, right: 0,
-                    child: Center(
-                      child: Container(
-                        width: 40, height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2), 
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+
+            centerTitle: true,
+            title: Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300], // 연한 회색
+                borderRadius: BorderRadius.circular(10), // 동글동글하게
               ),
             ),
+            actions: [
+              Consumer( // Riverpod 상태를 읽기 위해 Consumer로 감싸줍니다.
+                builder: (context, ref, child) {
+                  // 1. 전체 식당 목록에서 현재 식당 정보를 찾습니다.
+                  // (provider 이름은 개발자님 코드에 맞게 'restaurantProvider' 등을 쓰시면 됩니다)
+                  final asyncRestaurants = ref.watch(restaurantProvider); 
+                  
+                  return asyncRestaurants.maybeWhen(
+                    data: (restaurants) {
+                      // 현재 상세 페이지의 식당 아이디(_detailRestaurantId)로 해당 식당 찾기
+                      final restaurant = restaurants.firstWhere((r) => r.id == restaurantId);
+                      final isFav = restaurant.isFavorite; // 하트 켜짐 여부
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 20.0, right: 20.0),
+                        child: IconButton(
+                          icon: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.red : Colors.grey, // 켜지면 빨간색, 꺼지면 회색
+                            size: 28,
+                          ),
+                          onPressed: () {
+                            // 2. 하트를 눌렀을 때 토글하는 함수 호출
+                            // (notifier에 만들어두신 찜하기 토글 함수 이름을 넣어주세요!)
+                            ref.read(restaurantProvider.notifier).toggleFavorite(restaurant.id);
+                          },
+                        ),
+                      );
+                    },
+                    orElse: () => const SizedBox(), // 데이터 로딩 중이거나 에러일 땐 빈칸
+                  );
+                },
+              ),
+            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -160,7 +181,7 @@ class RestaurantDetailScreen extends ConsumerWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // 🌟 팀원분의 변경점: 실제 이름과 별점 연동!
+                      // 실제 이름과 별점 연동
                       Text(restaurant.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                       Row(
                         children: [
@@ -248,6 +269,9 @@ class RestaurantDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 80), 
           ),
         ],
       ),

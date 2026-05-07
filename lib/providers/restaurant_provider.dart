@@ -117,13 +117,6 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((ref)
       return true;
     }).toList();
 
-    // 필터 3: 하트 정렬
-    filtered.sort((a, b) {
-      if (a.isFavorite && !b.isFavorite) return -1;
-      if (!a.isFavorite && b.isFavorite) return 1;
-      return a.id.compareTo(b.id);
-    });
-
     return filtered;
   });
 });

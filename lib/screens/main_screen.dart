@@ -19,14 +19,15 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   
   int? _detailRestaurantId;
   bool _isDetailOpen = false;
+  FocusNode? _searchFocusNode;
 
-// *1번 여기까지*
+  // *1번 여기까지*
   final TransformationController _mapController = TransformationController();
   static const List<String> _searchKeywords = [
     '강남구 맛집', '강남역 스시', '강남 이자카야', '초밥의 달인', '불맛 짬뽕집', '파스타 공방', '할머니 국밥',
   ];
 
-// *변경 코드2* 애니메이션 코드 추가, 변수 추가
+  // *변경 코드2* 애니메이션 코드 추가, 변수 추가
   // 바텀 시트를 코드로 끌어내리기 위한 컨트롤러
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   
@@ -52,7 +53,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
       }
     });
   }
-// *2번 여기까지*
+  // *2번 여기까지*
 
   @override
   void dispose() {
@@ -162,36 +163,6 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   }
   // *4번 여기까지*
 
-  void _showMbtiDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Center(child: Text('🍽️ 나의 맛집 성향은?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20))),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children:[
-              const Text('오늘 끌리는 스타일을 선택해주세요!', style: TextStyle(color: AppColors.textSecondary)),
-              const SizedBox(height: 25),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('💰 무조건 가성비! 양 많은 게 최고', style: TextStyle(color: AppColors.background, fontSize: 16)),
-              ),
-              const SizedBox(height: 15),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('✨ 비싸도 퀄리티! 분위기 좋은 곳', style: TextStyle(color: AppColors.background, fontSize: 16)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   // *변경 코드7*
 Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color color, BuildContext context, double currentScale) {
     // 현재 핀이 사용자가 선택한 핀인지 확인
@@ -211,11 +182,15 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                   _detailRestaurantId = restaurant.id;
                   _isDetailOpen = true;
                 });
-                _sheetController.animateTo(
-                  1.0,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeOutCubic,
-                );
+                Future.delayed(const Duration(milliseconds: 50), () {
+                  if (_sheetController.isAttached) {
+                    _sheetController.animateTo(
+                      0.65, // 예쁜 황금 비율 높이!
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOutCubic,
+                    );
+                  }
+                });
               } else {
                 setState(() {
                   _selectedRestaurantId = restaurant.id;
@@ -335,44 +310,54 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
         child: Stack(
           children:[
             // 1층: 가짜 지도 배경
-            InteractiveViewer(
-              transformationController: _mapController,
-              maxScale: 3.0, minScale: 0.5,
-              child: Container(
-                width: 1500, height: 1500, color: AppColors.mapBackground,
-                // *변경 코드8*
-                child: ValueListenableBuilder<Matrix4>(
-                  valueListenable: _mapController,
-                  builder: (context, matrix, child) {
-                    // 현재 지도의 확대 배율을 가져옴
-                    final double currentScale = matrix.entry(0, 0);
 
-                    return Stack(
-                      children:[
-                        const Positioned(top: 400, left: 200, child: Text('여기를 잡고 이리저리 드래그 해보세요! 👆', style: TextStyle(fontSize: 24, color: Colors.black26, fontWeight: FontWeight.bold))),
-                        
-                        // 핀 그리기
-                        ...asyncDisplayedRestaurants.maybeWhen(
-                          data: (restaurants) {
-                            return restaurants.map((restaurant) {
-                              final double top = (37.5000 - restaurant.latitude) * 100000 + 100;
-                              final double left = (restaurant.longitude - 127.0250) * 100000 + 100;
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300), // 슬라이드 속도와 맞춤
+              curve: Curves.easeOutCubic,
+              // ✨ 마법의 스위치: 상세 페이지가 열리면 위로 150px 당기고, 아래도 150px 올려줍니다!
+              top: _isDetailOpen ? -150 : 0,
+              bottom: _isDetailOpen ? 150 : 0,
+              left: 0, right: 0,
 
-                              Color pinColor = const Color(0xFFCD7F32);
-                              if (restaurant.rating >= 4.8) pinColor = const Color(0xFFFFD700);
-                              else if (restaurant.rating >= 4.5) pinColor = const Color(0xFFC0C0C0);
+              child: InteractiveViewer(
+                transformationController: _mapController,
+                maxScale: 3.0, minScale: 0.5,
+                child: Container(
+                  width: 1500, height: 1500, color: AppColors.mapBackground,
+                  // *변경 코드8*
+                  child: ValueListenableBuilder<Matrix4>(
+                    valueListenable: _mapController,
+                    builder: (context, matrix, child) {
+                      // 현재 지도의 확대 배율을 가져옴
+                      final double currentScale = matrix.entry(0, 0);
 
-                              return _buildRankingMarker(restaurant, top, left, pinColor, context, currentScale);
-                            }).toList();
-                          },
-                          orElse: () =>[],
-                        ),
+                      return Stack(
+                        children:[
+                          const Positioned(top: 400, left: 200, child: Text('여기를 잡고 이리저리 드래그 해보세요! 👆', style: TextStyle(fontSize: 24, color: Colors.black26, fontWeight: FontWeight.bold))),
+                          
+                          // 핀 그리기
+                          ...asyncDisplayedRestaurants.maybeWhen(
+                            data: (restaurants) {
+                              return restaurants.map((restaurant) {
+                                final double top = (37.5000 - restaurant.latitude) * 100000 + 100;
+                                final double left = (restaurant.longitude - 127.0250) * 100000 + 100;
 
-                        // 내 위치 핀
-                        Positioned(top: 380, left: 180, child: Container(width: 20, height: 20, decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle, border: Border.all(color: AppColors.background, width: 3), boxShadow:[BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 10, spreadRadius: 5)]))),
-                      ],
-                    );
-                  },
+                                Color pinColor = const Color(0xFFCD7F32);
+                                if (restaurant.rating >= 4.8) pinColor = const Color(0xFFFFD700);
+                                else if (restaurant.rating >= 4.5) pinColor = const Color(0xFFC0C0C0);
+
+                                return _buildRankingMarker(restaurant, top, left, pinColor, context, currentScale);
+                              }).toList();
+                            },
+                            orElse: () =>[],
+                          ),
+
+                          // 내 위치 핀
+                          Positioned(top: 380, left: 180, child: Container(width: 20, height: 20, decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle, border: Border.all(color: AppColors.background, width: 3), boxShadow:[BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 10, spreadRadius: 5)]))),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -392,122 +377,201 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             // 2층: 카테고리
             Positioned(
               top: 90, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.only(left: 20),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children:[
-                      CategoryItem(emoji: '🍚', title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
-                      CategoryItem(emoji: '🍣', title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
-                      CategoryItem(emoji: '🍜', title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
-                      CategoryItem(emoji: '🍝', title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
-                      CategoryItem(emoji: '☕', title: '카페', isSelected: selectedCategory == '카페', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('카페')),
-                      CategoryItem(emoji: '🍔', title: '패스트푸드', isSelected: selectedCategory == '패스트푸드', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('패스트푸드')),
-                      CategoryItem(emoji: '🍺', title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
-                    ],
+              
+              // 1. 투명도 애니메이션: 상세 화면이 열리면 투명해짐 (0.0)
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: _isDetailOpen ? 0.0 : 1.0, 
+                
+                // 2. 터치 방지: 투명해졌을 때 뒤에 숨은 버튼이 눌리는 걸 막아줌
+                child: IgnorePointer(
+                  ignoring: _isDetailOpen, 
+                  
+                  child: Container(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children:[
+                          CategoryItem(emoji: '🍚', title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
+                          CategoryItem(emoji: '🍣', title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
+                          CategoryItem(emoji: '🍜', title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
+                          CategoryItem(emoji: '🍝', title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
+                          CategoryItem(emoji: '☕', title: '카페', isSelected: selectedCategory == '카페', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('카페')),
+                          CategoryItem(emoji: '🍔', title: '패스트푸드', isSelected: selectedCategory == '패스트푸드', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('패스트푸드')),
+                          CategoryItem(emoji: '🍺', title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
 
             // *변경 코드11* 4층 5층 코드 3층 앞으로 이동
-            // 4층: 검색창 (연관 검색어 Autocomplete 적용)
+            // 4층: 검색창 (최종: 부드럽게 원형으로 변신하는 Morphing 애니메이션)
             Positioned(
-              top: 20, left: 20, right: 90,
-              child: Autocomplete<String>(
-                // 1. 검색어 필터링 로직
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<String>.empty();
-                  }
-                  return _searchKeywords.where((String keyword) {
-                    return keyword.contains(textEditingValue.text); // 입력한 글자가 포함된 단어 찾기
-                  });
-                },
+              top: 20, 
+              left: 20, // 왼쪽 고정!
+              
+              // 🌟 1단계: 모양과 크기 변화를 담당하는 AnimatedContainer
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300), // 변신 속도
+                curve: Curves.easeInOutCubic, // 부드러운 움직임
                 
-                // 2. 연관 검색어를 클릭했을 때의 동작
-                onSelected: (String selection) {
-                  // Riverpod 상태 업데이트 (검색 실행)
-                  ref.read(searchQueryProvider.notifier).updateQuery(selection);
-                  FocusScope.of(context).unfocus(); // 키보드 내리기
-                },
+                // ✨ 상세 열림 여부에 따라 크기와 너비를 동적으로 변경
+                width: _isDetailOpen ? 50 : MediaQuery.of(context).size.width - 110,
+                height: 50,
                 
-                // 3. 기존 검색창 UI 유지
-                fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-                  return Container(
-                    height: 50, 
-                    decoration: BoxDecoration(
-                      color: AppColors.background, 
-                      borderRadius: BorderRadius.circular(25), 
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 15), 
-                        const Icon(Icons.search, color: AppColors.textSecondary), 
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: textEditingController, // Autocomplete 전용 컨트롤러 사용
-                            focusNode: focusNode,
-                            onChanged: (value) {
-                              // 타이핑할 때마다 Riverpod 상태 업데이트
-                              ref.read(searchQueryProvider.notifier).updateQuery(value);
-                            },
-                            decoration: const InputDecoration(
-                              hintText: '음식점, 주소 검색', 
-                              hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14), 
-                              border: InputBorder.none
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                decoration: BoxDecoration(
+                  color: AppColors.background, // (또는 Colors.white)
+                  // ✨ 핵심: 좁아지면서 완벽한 원형(25)으로 맞춰짐
+                  borderRadius: BorderRadius.circular(25), 
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+                ),
                 
-                // 4. 연관 검색어 드롭다운 창 UI 디자인
-                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
-                  return Align(
-                    alignment: Alignment.topLeft,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 8), // 검색창과 살짝 간격 띄우기
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                        ),
-                        // 드롭다운 최대 크기 지정 (화면 밖으로 넘어가지 않게)
-                        constraints: BoxConstraints(maxHeight: 200, maxWidth: MediaQuery.of(context).size.width - 110),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shrinkWrap: true,
-                          itemCount: options.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final String option = options.elementAt(index);
-                            return InkWell(
-                              onTap: () => onSelected(option),
-                              borderRadius: BorderRadius.circular(10),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
-                                    const SizedBox(width: 10),
-                                    Text(option, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
-                                  ],
-                                ),
+                // 🌟 2단계: 안쪽 글자가 튀어나가는 걸 방지하는 ClipRRect
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(25),
+                  child: SingleChildScrollView( // 긴 검색창 내용물이 잘릴 때 오류 방지
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(), // 드래그 금지
+                    
+                    // 🌟 3단계: 내용물 전환을 담당하는 AnimatedSwitcher
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200), // 내용물 전환 속도
+                      switchInCurve: Curves.easeIn,
+                      switchOutCurve: Curves.easeOut,
+                      
+                      child: _isDetailOpen 
+                          ? SizedBox(
+                              key: const ValueKey('search_btn_morph'),
+                              width: 50, height: 50,
+                              // 🌟 상태 1: 상세 열림 - 동그란 돋보기 아이콘 버튼
+                              child: IconButton(
+                                icon: const Icon(Icons.search, color: Colors.black87, size: 24,),
+                                onPressed: () {
+                                  // 돋보기 누르면 다시 검색창이 길어짐
+                                  setState(() { _isDetailOpen = false; });
+                                  Future.delayed(const Duration(milliseconds: 50), () {
+                                    if (_sheetController.isAttached) {
+                                      _sheetController.animateTo(
+                                        0.45, // 뒤로가기와 똑같이 0.45로 복귀!
+                                        duration: const Duration(milliseconds: 400),
+                                        curve: Curves.easeOutCubic,
+                                      );
+                                    }
+                                  });
+                                  // ✨ 3. [추가] 검색창이 길어질 시간(0.3초)을 기다렸다가 키보드 강제 소환!
+                                  Future.delayed(const Duration(milliseconds: 300), () {
+                                    _searchFocusNode?.requestFocus();
+                                  });
+                                },
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            )
+                          : SizedBox(
+                              key: const ValueKey('search_bar_morph'),
+                              // ✨ 긴 검색창의 너비를 고정시켜서 에러 원천 차단
+                              width: MediaQuery.of(context).size.width - 110,
+                              height: 50,
+                              // 🌟 상태 2: 평소 화면 - 긴 Autocomplete 검색창
+                              child: Autocomplete<String>(
+                                // 1. 검색어 필터링 로직
+                                optionsBuilder: (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text.isEmpty) {
+                                    return const Iterable<String>.empty();
+                                  }
+                                  return _searchKeywords.where((String keyword) {
+                                    return keyword.contains(textEditingValue.text);
+                                  });
+                                },
+                                
+                                // 2. 연관 검색어를 클릭했을 때의 동작
+                                onSelected: (String selection) {
+                                  ref.read(searchQueryProvider.notifier).updateQuery(selection);
+                                  FocusScope.of(context).unfocus();
+                                },
+                                
+                                // 3. 기존 검색창 UI 유지
+                                fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                                  _searchFocusNode = focusNode;
+                                  return Container(
+                                    height: 50, 
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background, 
+                                      borderRadius: BorderRadius.circular(25), 
+                                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(width: 15), 
+                                        const Icon(Icons.search, color: AppColors.textSecondary), 
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: textEditingController, 
+                                            focusNode: focusNode,
+                                            onChanged: (value) {
+                                              ref.read(searchQueryProvider.notifier).updateQuery(value);
+                                            },
+                                            decoration: const InputDecoration(
+                                              hintText: '음식점, 주소 검색', 
+                                              hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14), 
+                                              border: InputBorder.none
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                
+                                // 4. 연관 검색어 드롭다운 창 UI 디자인
+                                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
+                                  return Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: Container(
+                                        margin: const EdgeInsets.only(top: 8), 
+                                        decoration: BoxDecoration(
+                                          color: AppColors.background,
+                                          borderRadius: BorderRadius.circular(20),
+                                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                        ),
+                                        constraints: BoxConstraints(maxHeight: 200, maxWidth: MediaQuery.of(context).size.width - 110),
+                                        child: ListView.builder(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          shrinkWrap: true,
+                                          itemCount: options.length,
+                                          itemBuilder: (BuildContext context, int index) {
+                                            final String option = options.elementAt(index);
+                                            return InkWell(
+                                              onTap: () => onSelected(option),
+                                              borderRadius: BorderRadius.circular(10),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
+                                                    const SizedBox(width: 10),
+                                                    Text(option, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              // 👆 여기까지 개발자님의 기존 Autocomplete<String>( ... ) 코드입니다!
+                            ),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
             
@@ -546,7 +610,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             DraggableScrollableSheet(
               controller: _sheetController, 
               initialChildSize: 0.45, minChildSize: 0.22, 
-              maxChildSize: _isDetailOpen ? 1.0 : 0.87, snap: true, snapSizes: _isDetailOpen ? const [0.22, 0.45, 1.0] : const [0.22, 0.45, 0.87],
+              maxChildSize: _isDetailOpen ? 1.0 : 0.87, snap: true, snapSizes: _isDetailOpen ? const [0.22, 0.65, 1.0] : const [0.22, 0.45, 0.87],
               builder: (BuildContext context, ScrollController scrollController) {
                 _listScrollController = scrollController;
                 return Container(
@@ -589,7 +653,15 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                         _detailRestaurantId = restaurant.id;
                                                         _isDetailOpen = true; 
                                                       });
-                                                      _sheetController.animateTo(1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+                                                      Future.delayed(const Duration(milliseconds: 50), () {
+                                                        if (_sheetController.isAttached) { // 안전 장치: 컨트롤러가 잘 붙어있는지 확인
+                                                          _sheetController.animateTo(
+                                                            0.65, 
+                                                            duration: const Duration(milliseconds: 400), 
+                                                            curve: Curves.easeOutCubic
+                                                          );
+                                                        }
+                                                      });
                                                     } else {
                                                       setState(() => _selectedRestaurantId = restaurant.id);
                                                       _animateMapToRestaurant(restaurant);
@@ -631,13 +703,23 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                             color: AppColors.background,
                             child: _detailRestaurantId != null
                                 ? RestaurantDetailScreen(
+                                    key: ValueKey(_detailRestaurantId),
                                     restaurantId: _detailRestaurantId!,
                                     scrollController: _isDetailOpen ? scrollController : null, 
                                     onBack: () {
                                       setState(() {
                                         _isDetailOpen = false; 
                                       });
-                                      _sheetController.animateTo(0.45, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+                                      // 자석 배열이 평소 상태로 돌아올 때까지 0.05초 기다렸다가 0.45로 스윽 내립니다.
+                                      Future.delayed(const Duration(milliseconds: 50), () {
+                                        if (_sheetController.isAttached) {
+                                          _sheetController.animateTo(
+                                            0.45, 
+                                            duration: const Duration(milliseconds: 400), 
+                                            curve: Curves.easeOutCubic
+                                          );
+                                        }
+                                      });
                                     },
                                   )
                                 : const SizedBox(),
