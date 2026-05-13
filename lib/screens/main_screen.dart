@@ -598,7 +598,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.favorite, color: AppColors.error, size: 20),
-                      Text('찜 목록', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('킵', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),

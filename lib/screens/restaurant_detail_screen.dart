@@ -29,12 +29,7 @@ class RestaurantDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAiReviewText(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(text, style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87)),
-    );
-  }
+ 
 
   Widget _buildInfoRow(IconData icon, String text) {
     return Padding(
@@ -185,7 +180,14 @@ class RestaurantDetailScreen extends ConsumerWidget {
                       Text(restaurant.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                       Row(
                         children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 24),
+                          // ✨ 수정된 부분: 평점에 따라 금, 은, 동 트로피로 변경
+                          Icon(
+                            Icons.emoji_events, // 트로피 아이콘 (메달 모양을 원하시면 Icons.military_tech 로 변경 가능)
+                            color: restaurant.rating >= 4.5 ? const Color(0xFFFFD700) : // 4.5 이상: 금색
+                                   restaurant.rating >= 4.0 ? const Color(0xFFC0C0C0) : // 4.0 이상: 은색
+                                   const Color(0xFFCD7F32),                             // 그 외: 동색
+                            size: 24,
+                          ),
                           const SizedBox(width: 4),
                           Text(restaurant.rating.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
@@ -222,8 +224,9 @@ class RestaurantDetailScreen extends ConsumerWidget {
                           BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
                         ]
                       ),
-                      child: Column(
-                        children: restaurant.menus.map((menu) => _buildMenuItem(menu)).toList(),
+                     child: Column(
+                        // ✨ 수정된 부분: take(3)를 추가해서 딱 3개만 가져옵니다.
+                        children: restaurant.menus.take(3).map((menu) => _buildMenuItem(menu)).toList(),
                       ),
                     )
                   else
@@ -233,32 +236,6 @@ class RestaurantDetailScreen extends ConsumerWidget {
                       child: const Center(child: Text('메뉴 정보가 준비되지 않았습니다.', style: TextStyle(color: Colors.black54))),
                     ),
 
-                  const SizedBox(height: 30),
-                  
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0F4FA),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.auto_awesome, color: Colors.blueAccent),
-                            SizedBox(width: 8),
-                            Text('AI 리뷰 3줄 요약', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)),
-                          ],
-                        ),
-                        const SizedBox(height: 15),
-                        _buildAiReviewText('✨ "가격 대비 양이 정말 많고 맛있어요!"'),
-                        _buildAiReviewText('✨ "인테리어가 깔끔해서 사진 찍기 좋습니다."'),
-                        _buildAiReviewText('✨ "저녁 시간에는 웨이팅이 길 수 있으니 예약 추천해요."'),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 30),
                   const Text('매장 정보', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 15),
