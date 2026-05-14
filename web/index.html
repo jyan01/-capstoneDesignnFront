@@ -31,6 +31,50 @@
 
   <title>matjib_app</title>
   <link rel="manifest" href="manifest.json">
+
+  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=여기에직접입력"></script>
+
+  <script>
+    let kakaoMap; 
+    let userMarker; 
+    let initialLat = 37.498095;
+    let initialLng = 127.027610;
+
+    function setInitialLocation(lat, lng) {
+      initialLat = lat;
+      initialLng = lng;
+    }
+
+    function initKakaoMap(container) {
+      var initialPos = new kakao.maps.LatLng(initialLat, initialLng);
+      var options = { center: initialPos, level: 3 };
+      kakaoMap = new kakao.maps.Map(container, options);
+
+      // ✨ [수정] 기본 빨간 핀 대신, 지도 앱의 상징인 '파란색 동그라미(SVG)' 생성!
+      var svgIcon = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23007AFF' stroke='white' stroke-width='3'/%3E%3C/svg%3E";
+      var markerImage = new kakao.maps.MarkerImage(svgIcon, new kakao.maps.Size(24, 24), {offset: new kakao.maps.Point(12, 12)});
+
+      userMarker = new kakao.maps.Marker({
+        map: kakaoMap,
+        position: initialPos,
+        image: markerImage // 파란 점 적용!
+      });
+    }
+
+    // 버튼 누를 때 지도를 부드럽게 이동 (기존과 동일)
+    function moveMap(lat, lng) {
+      if (kakaoMap) {
+        kakaoMap.panTo(new kakao.maps.LatLng(lat, lng)); 
+      }
+    }
+
+    // ✨ [추가] 내가 걸어갈 때 지도 화면은 가만히 있고 '파란 점'만 쫄쫄쫄 따라가게 하는 함수!
+    function updateUserMarker(lat, lng) {
+      if (userMarker) {
+        userMarker.setPosition(new kakao.maps.LatLng(lat, lng));
+      }
+    }
+  </script>
 </head>
 <body>
   <!--
