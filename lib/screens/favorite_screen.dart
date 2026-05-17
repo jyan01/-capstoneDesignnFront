@@ -19,7 +19,7 @@ class FavoriteScreen extends ConsumerWidget {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          '💖 나의 찜 목록',
+          '💖 Keep List',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
         ),
         foregroundColor: AppColors.textPrimary,

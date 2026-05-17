@@ -37,7 +37,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'AI 맛집 추천',
-      theme: ThemeData(scaffoldBackgroundColor: Colors.white),
+      theme: ThemeData(
+          scaffoldBackgroundColor: Colors.white,
+          fontFamily: 'Noto Sans KR', // ✨ 폰트 적용
+        ),
       home: const MainScreen(),
     );
   }
