@@ -284,21 +284,17 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
     // *변경 코드6*
     Widget buildSheetHeader(int count) {
       return GestureDetector(
-        // 손잡이를 잡고 움직일 때 바텀시트 크기 수동 조절
         onVerticalDragUpdate: (details) {
           final screenHeight = MediaQuery.of(context).size.height;
           double newSize = _sheetController.size - (details.primaryDelta! / screenHeight);
-          _sheetController.jumpTo(newSize.clamp(0.14, 0.87)); // 최소, 최대치 고정
+          _sheetController.jumpTo(newSize.clamp(0.14, 0.87));
         },
-        // 손을 뗐을 때 가장 가까운포인트로 스냅
         onVerticalDragEnd: (details) {
           final currentSize = _sheetController.size;
           const snapSizes = [0.14, 0.45, 0.87]; 
-          
           double closest = snapSizes.reduce((a, b) => 
             (a - currentSize).abs() < (b - currentSize).abs() ? a : b
           );
-          
           _sheetController.animateTo(
             closest,
             duration: const Duration(milliseconds: 300),
@@ -311,8 +307,11 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             crossAxisAlignment: CrossAxisAlignment.start,
             children:[
               Center(child: Container(margin: const EdgeInsets.only(top: 15, bottom: 15), width: 40, height: 5, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(10)))),
+              
+              // 📍 1. 타이틀 영역 ('근처 추천 맛집')
               Container(
-                height: 75, padding: const EdgeInsets.symmetric(horizontal: 20), alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 20), 
+                alignment: Alignment.center,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children:[
@@ -321,6 +320,30 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                   ],
                 ),
               ),
+
+              const SizedBox(height: 15), // 타이틀과 카테고리 사이 여백
+
+              // 📍 2. 카테고리 리스트 영역 (여기로 이사 왔습니다!)
+              Container(
+                padding: const EdgeInsets.only(left: 20, bottom: 15),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children:[
+                      CategoryItem(title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
+                      CategoryItem(title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
+                      CategoryItem(title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
+                      CategoryItem(title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
+                      CategoryItem(title: '아시안', isSelected: selectedCategory == '아시안', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('아시안')),
+                      CategoryItem(title: '멕시칸', isSelected: selectedCategory == '멕시칸', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('멕시칸')),
+                      CategoryItem(title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // 하단 리스트와의 구분선
+              Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
             ],
           ),
         ),
@@ -369,42 +392,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                 ),
               ),
 
-              // 2층: 카테고리
-              Positioned(
-                top: 90, left: 0, right: 0,
-                
-                // 1. 투명도 애니메이션: 상세 화면이 열리면 투명해짐 (0.0)
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: _isDetailOpen ? 0.0 : 1.0, 
-                  
-                  // 2. 터치 방지: 투명해졌을 때 뒤에 숨은 버튼이 눌리는 걸 막아줌
-                  child: IgnorePointer(
-                    ignoring: _isDetailOpen, 
-
-                    child: PointerInterceptor(
-                      child: Container(
-                        padding: const EdgeInsets.only(left: 20),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children:[
-                              CategoryItem(emoji: '🍚', title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
-                              CategoryItem(emoji: '🍣', title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
-                              CategoryItem(emoji: '🍜', title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
-                              CategoryItem(emoji: '🍝', title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
-                              CategoryItem(emoji: '☕', title: '카페', isSelected: selectedCategory == '카페', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('카페')),
-                              CategoryItem(emoji: '🍔', title: '패스트푸드', isSelected: selectedCategory == '패스트푸드', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('패스트푸드')),
-                              CategoryItem(emoji: '🍺', title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
+              
               // *변경 코드11* 4층 5층 코드 3층 앞으로 이동
               // 4층: 검색창 (최종: 부드럽게 원형으로 변신하는 Morphing 애니메이션)
               Positioned(
@@ -674,9 +662,9 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                           }
                                                         }
                                                       },
-                                                      leading: Container(width: 50, height: 50, decoration: BoxDecoration(color: AppColors.secondaryLight, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.restaurant, color: AppColors.secondary)),
+                                                      // leading: ... (이미지 삭제 완료!)
                                                       title: Text(restaurant.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                                      subtitle: Text('강남구 · ${restaurant.distance}km · ⭐ ${restaurant.rating}', style: const TextStyle(color: AppColors.textSecondary)),
+                                                      subtitle: Text('⭐ ${restaurant.rating}', style: const TextStyle(color: AppColors.textSecondary)), // 강남구, 거리 삭제 완료!
                                                       trailing: IconButton(icon: Icon(restaurant.isFavorite ? Icons.favorite : Icons.favorite_border, color: restaurant.isFavorite ? AppColors.error : AppColors.divider), onPressed: () => ref.read(restaurantProvider.notifier).toggleFavorite(restaurant.id)),
                                                     ),
                                                   );

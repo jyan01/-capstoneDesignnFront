@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 class CategoryItem extends StatelessWidget {
-  final String emoji;
   final String title;
   final bool isSelected;
   final VoidCallback onTap;
 
   const CategoryItem({
     super.key,
-    required this.emoji,
     required this.title,
     required this.isSelected,
     required this.onTap,
@@ -20,39 +18,36 @@ class CategoryItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(right: 20),
-        child: Column(
-          children:[
-            Container(
-              width: 55,
-              height: 55,
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primaryLight : AppColors.background, // 디자인 시스템 적용
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? AppColors.primary : Colors.transparent, // 디자인 시스템 적용
-                  width: 2,
-                ),
-                boxShadow:[
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)
-                ],
-              ),
-              child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 26)), // 글씨는 변하지 않으니 const 유지
-              ),
+        padding: const EdgeInsets.only(right: 12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            // ✨ 아까 수정한 은은한 회색 배경!
+            color: isSelected ? AppColors.primaryLight : Colors.grey.shade100, 
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : Colors.grey.shade300,
+              width: 1.5,
             ),
-            const SizedBox(height: 8), // 여백도 변하지 않으니 const
-            Text(
-              title, 
-              style: TextStyle(
-                fontSize: 12, 
-                fontWeight: FontWeight.bold,
-                color: isSelected ? AppColors.primary : AppColors.textPrimary, // 디자인 시스템 적용
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isSelected ? 0.08 : 0.03),
+                blurRadius: 5,
+                offset: const Offset(0, 3)
               )
-            ),
-          ],
+            ],
+          ),
+          child: Text(
+            title, 
+            style: TextStyle(
+              fontSize: 14, 
+              fontWeight: FontWeight.bold,
+              color: isSelected ? AppColors.primary : AppColors.textPrimary.withOpacity(0.8),
+            )
+          ),
         ),
       ),
     );
   }
-}
+} // 👈 아까 복붙하시면서 이 마지막 괄호가 날아갔을 확률 99.9%입니다! 😆
