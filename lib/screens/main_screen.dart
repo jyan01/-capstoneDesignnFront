@@ -10,6 +10,7 @@ import 'restaurant_detail_screen.dart';
 import 'favorite_screen.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../screens/map_screen.dart';
+import 'package:matjib_app/services/kakao_api_service.dart';
 import 'dart:js' as js;
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   FocusNode? _searchFocusNode;
   Position? _myPosition; // 내 진짜 위치 저장용
   bool _isLoadingLocation = true; // 로딩 상태
+  bool _isKeepMode = false; // ✨ 킵(보관함) 모드 켜짐/꺼짐 상태
 
   // *1번 여기까지*
   final TransformationController _mapController = TransformationController();
@@ -181,12 +183,86 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   }
 
   void _animateToMyLocation() {
+    print("📍 내 위치로 스르륵 날아갑니다...");
+
     if (_myPosition != null) {
-      // GPS 다시 찾을 필요 없이, 실시간으로 추적 중인 최신 좌표로 즉각 이동!
+      // 1. 핀 지우고 지도를 내 위치로 이동!
+      js.context.callMethod('clearSearchMarker');
       js.context.callMethod('moveMap', [_myPosition!.latitude, _myPosition!.longitude]);
+      
+      // ✨ 2. 검색창에 적혀있던 글자를 싹 지워줍니다.
+      ref.read(searchQueryProvider.notifier).updateQuery('');
+      
+      // ✨ 3. 바텀시트가 열려있었다면 닫고, 높이를 0.45로 원상 복구합니다.
+      setState(() {
+        _isDetailOpen = false;
+      });
+      if (_sheetController.isAttached) {
+        _sheetController.animateTo(
+          0.45, 
+          duration: const Duration(milliseconds: 400), 
+          curve: Curves.easeOutCubic
+        );
+      }
+
+      // 🚨 4. [나중에 1번(백엔드) 작업할 때 여기에 들어갈 코드]
+      // 아직 백엔드가 없어서 데이터가 안 바뀌는 것입니다!
+      // 나중에 서버 통신이 연결되면, 이 자리에 아래와 같은 코드가 추가될 예정입니다.
+      // 예: ref.read(restaurantProvider.notifier).fetchRestaurants(_myPosition!.latitude, _myPosition!.longitude);
     }
   }
   // *4번 여기까지*
+
+  // ✨ 검색 처리 함수
+  void _handleSearch(String keyword) async {
+    FocusScope.of(context).unfocus(); // 키보드 내리기
+    if (keyword.trim().isEmpty) return;
+    
+    setState(() {
+      _selectedRestaurantId = null;
+      _detailRestaurantId = null;
+    });
+
+    print('📍 "$keyword" 위치 찾는 중...');
+    final result = await KakaoApiService.searchPlace(keyword);
+    
+    if (result != null) {
+      // 1. 기존 moveMap 대신, 방금 만든 '핀 꽂고 이동하는 함수' 실행!
+      js.context.callMethod('addSearchMarker', [
+        result['lat'], 
+        result['lng'], 
+        result['name'] // 👈 추가된 부분!
+      ]);
+      
+      // 3. (선택) 검색창이 상세 모드였다면 기본 모드로 닫아주기
+      setState(() {
+        _isDetailOpen = false;
+      });
+
+      // ✨ [핵심] 화면이 새로 다 그려진 후, 딱 0.1초 뒤에 안정적으로 바텀시트를 올립니다.
+      Future.delayed(const Duration(milliseconds: 400), () {
+        // 화면이 안전한 상태인지 한 번 더 확인 (mounted)
+        if (mounted && _sheetController.isAttached) {
+          _sheetController.animateTo(
+            0.45, 
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+
+      // ✨ 4. [미래에 추가될 코드] 리버팟에게 "새 좌표 주변 맛집으로 데이터 새로고침 해줘!" 라고 명령
+      // ref.read(restaurantListProvider.notifier).fetchRestaurantsAround(result['lat'], result['lng']);
+      
+    } else {
+      // 검색 실패 시
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('앗! "$keyword" 위치를 찾을 수 없어요. 😢')),
+        );
+      }
+    }
+  }
 
   // *변경 코드7*
 Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color color, BuildContext context, double currentScale) {
@@ -473,8 +549,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                   
                                   // 2. 연관 검색어를 클릭했을 때의 동작
                                   onSelected: (String selection) {
-                                    ref.read(searchQueryProvider.notifier).updateQuery(selection);
-                                    FocusScope.of(context).unfocus();
+                                    _handleSearch(selection);
                                   },
                                   
                                   // 3. 기존 검색창 UI 유지
@@ -498,6 +573,9 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                               focusNode: focusNode,
                                               onChanged: (value) {
                                                 ref.read(searchQueryProvider.notifier).updateQuery(value);
+                                              },
+                                              onSubmitted: (value) {
+                                                _handleSearch(value);
                                               },
                                               decoration: const InputDecoration(
                                                 hintText: '음식점, 주소 검색', 
@@ -561,38 +639,63 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
               ),
               
 
-              // 5층: 찜 목록 버튼 코드
+              // 5층: 찜 목록 버튼 코드 (바텀시트 연동형으로 진화 🚀)
               Positioned(
                 top: 20, 
                 right: 20,
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (context) => const FavoriteScreen(),
-                    ));
+                    setState(() {
+                      // ✨ 1. [핵심] 버튼을 누를 때마다 킵 모드를 껐다 켭니다!
+                      _isKeepMode = !_isKeepMode; 
+                      
+                      // 킵 모드가 켜질 때는 상세화면이 열려있었다면 닫아줍니다.
+                      if (_isKeepMode) {
+                        _isDetailOpen = false; 
+                      }
+                    });
+                    
                   },
-                  child: Container(
+                  child: AnimatedContainer( // ✨ 색상 변화를 부드럽게 주기 위해 AnimatedContainer로 업그레이드!
+                    duration: const Duration(milliseconds: 200),
                     height: 50, width: 60,
                     decoration: BoxDecoration(
-                      color: AppColors.background, 
+                      // ✨ 3. [디테일] 킵 모드가 켜지면 배경색을 빨간색으로, 꺼지면 기본 배경색으로 반전!
+                      color: _isKeepMode ? AppColors.error : AppColors.background, 
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)],
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)), 
+                      border: Border.all(
+                        color: _isKeepMode ? Colors.transparent : AppColors.error.withOpacity(0.3)
+                      ), 
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.favorite, color: AppColors.error, size: 20),
-                        Text('keep', style: TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.bold)),
+                        // ✨ 4. [디테일] 킵 모드가 켜지면 아이콘을 흰색으로, 꺼지면 빨간색으로 변경!
+                        Icon(
+                          Icons.favorite, 
+                          color: _isKeepMode ? Colors.white : AppColors.error, 
+                          size: 20
+                        ),
+                        // ✨ 5. [디테일] 텍스트 색상도 동일하게 반전!
+                        Text(
+                          'keep', 
+                          style: TextStyle(
+                            color: _isKeepMode ? Colors.white : AppColors.error, 
+                            fontSize: 10, 
+                            fontWeight: FontWeight.bold
+                          )
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-
+              
               // *변경 코드5*
               // 3층: 바텀시트
               DraggableScrollableSheet(
+                key: const ValueKey('bottom_sheet_key'), // ✨ 고정 키 부여!
                 controller: _sheetController, 
                 initialChildSize: 0.45, minChildSize: 0.22, 
                 maxChildSize: _isDetailOpen ? 1.0 : 0.87, snap: true, snapSizes: _isDetailOpen ? const [0.22, 0.65, 1.0] : const [0.22, 0.45, 0.87],
@@ -613,20 +716,41 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                 loading: () => Column(children:[buildSheetHeader(0), const Expanded(child: Center(child: CircularProgressIndicator(color: AppColors.primary)))]),
                                 error: (error, stack) => Column(children:[buildSheetHeader(0), Expanded(child: Center(child: Text('서버와 연결할 수 없어요 😢\n$error', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.error))))]),
                                 data: (restaurants) {
+                                  // ✨ 1. Keep 모드가 켜져있으면 하트(isFavorite) 누른 것만 추려냅니다.
+                                  final displayList = _isKeepMode 
+                                      ? restaurants.where((r) => r.isFavorite).toList() 
+                                      : restaurants;
+
                                   return Column(
                                     children:[
-                                      buildSheetHeader(restaurants.length),
+                                      // 상단 헤더 개수 표시
+                                      buildSheetHeader(displayList.length),
+                                      
                                       Expanded(
-                                        child: restaurants.isEmpty
-                                            ? const Center(child: Text('검색 결과가 없습니다 텅~ 🍃\n다른 키워드로 검색해보세요!', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 16, height: 1.5)))
+                                        child: displayList.isEmpty
+                                            ? SingleChildScrollView(
+                                                controller: !_isDetailOpen ? scrollController : null,
+                                                physics: const AlwaysScrollableScrollPhysics(), 
+                                                child: Container(
+                                                  height: 300, 
+                                                  alignment: Alignment.center,
+                                                  child: Text(
+                                                    _isKeepMode 
+                                                      ? '보관한 맛집이 없습니다 텅~ 💔\n마음에 드는 식당에 하트를 눌러보세요!'
+                                                      : '검색 결과가 없습니다 텅~ 🍃\n다른 키워드로 검색해보세요!', 
+                                                    textAlign: TextAlign.center, 
+                                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 16, height: 1.5)
+                                                  ),
+                                                ),
+                                              )
                                             : ListView.builder(
-                                                controller: !_isDetailOpen ? scrollController : null, 
+                                                controller: !_isDetailOpen ? scrollController : null,
                                                 key: const PageStorageKey('restaurant_list'), 
                                                 padding: const EdgeInsets.only(bottom: 100),
                                                 itemExtent: 85.0,
-                                                itemCount: restaurants.length, 
+                                                itemCount: displayList.length, 
                                                 itemBuilder: (context, index) {
-                                                  Restaurant restaurant = restaurants[index];
+                                                  Restaurant restaurant = displayList[index];
                                                   bool isSelected = _selectedRestaurantId == restaurant.id;
 
                                                   return Container(
@@ -635,12 +759,17 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                     child: ListTile(
                                                       onTap: () {
                                                         if (isSelected) {
+                                                          // 🏢 1. 이미 선택된 카드를 '한 번 더' 눌러 상세화면(0.65)으로 갈 때
                                                           setState(() {
                                                             _detailRestaurantId = restaurant.id;
                                                             _isDetailOpen = true; 
                                                           });
+                                                          
+                                                          // 🗺️ [1번 버그 해결] 상세창이 열릴 때 지도를 위로 슬쩍 밀어 올려서 핀이 보이게 합니다!
+                                                          js.context.callMethod('panMapForDetail');
+
                                                           Future.delayed(const Duration(milliseconds: 50), () {
-                                                            if (_sheetController.isAttached) { // 안전 장치: 컨트롤러가 잘 붙어있는지 확인
+                                                            if (_sheetController.isAttached) { 
                                                               _sheetController.animateTo(
                                                                 0.65, 
                                                                 duration: const Duration(milliseconds: 400), 
@@ -649,23 +778,43 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                             }
                                                           });
                                                         } else {
+                                                          // 🏢 2. 카드를 '처음' 탭했을 때 (선택 + 지도 이동 + 시트 0.45 정렬)
                                                           setState(() => _selectedRestaurantId = restaurant.id);
+                                                          
+                                                          // 지도를 해당 음식점 정중앙으로 이동
                                                           _animateMapToRestaurant(restaurant);
-                                                          final restaurantsList = ref.read(filteredRestaurantsProvider).value ?? [];
-                                                          final targetIndex = restaurantsList.indexWhere((r) => r.id == restaurant.id);
+                                                          
+                                                          if (_sheetController.isAttached) {
+                                                            _sheetController.animateTo(
+                                                              0.45, 
+                                                              duration: const Duration(milliseconds: 300), 
+                                                              curve: Curves.easeOutCubic,
+                                                            );
+                                                          }
+                                                          
+                                                          // 📜 [2번 버그 해결] 원본 프로바이더 대신, 현재 화면에 띄워진 'displayList'를 기준으로 인덱스를 찾습니다!
+                                                          // 이렇게 해야 일반 모드든 킵 모드든 내 눈에 보이는 순서대로 정확히 스크롤됩니다.
+                                                          final targetIndex = displayList.indexWhere((r) => r.id == restaurant.id);
+                                                          
                                                           if (targetIndex != -1) {
-                                                            Future.delayed(const Duration(milliseconds: 450), () {
+                                                            Future.delayed(const Duration(milliseconds: 300), () {
                                                               if (scrollController.hasClients) {
-                                                                scrollController.animateTo(targetIndex * 85.0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+                                                                scrollController.animateTo(
+                                                                  targetIndex * 85.0, 
+                                                                  duration: const Duration(milliseconds: 400), 
+                                                                  curve: Curves.easeOutCubic
+                                                                );
                                                               }
                                                             });
                                                           }
                                                         }
                                                       },
-                                                      // leading: ... (이미지 삭제 완료!)
                                                       title: Text(restaurant.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                                      subtitle: Text('⭐ ${restaurant.rating}', style: const TextStyle(color: AppColors.textSecondary)), // 강남구, 거리 삭제 완료!
-                                                      trailing: IconButton(icon: Icon(restaurant.isFavorite ? Icons.favorite : Icons.favorite_border, color: restaurant.isFavorite ? AppColors.error : AppColors.divider), onPressed: () => ref.read(restaurantProvider.notifier).toggleFavorite(restaurant.id)),
+                                                      subtitle: Text('⭐ ${restaurant.rating}', style: const TextStyle(color: AppColors.textSecondary)), 
+                                                      trailing: IconButton(
+                                                        icon: Icon(restaurant.isFavorite ? Icons.favorite : Icons.favorite_border, color: restaurant.isFavorite ? AppColors.error : AppColors.divider), 
+                                                        onPressed: () => ref.read(restaurantProvider.notifier).toggleFavorite(restaurant.id)
+                                                      ),
                                                     ),
                                                   );
                                                 },

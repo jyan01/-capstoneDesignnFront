@@ -32,7 +32,8 @@
   <title>matjib_app</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=여기에직접입력"></script>
+  <!-- 본인의 자바 스크립트 키 넣기 -->
+  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=Java_Script_KEY"></script>
 
   <script>
     let kakaoMap; 
@@ -72,6 +73,66 @@
     function updateUserMarker(lat, lng) {
       if (userMarker) {
         userMarker.setPosition(new kakao.maps.LatLng(lat, lng));
+      }
+    }
+
+    // ✨ 검색한 곳에 핀을 꽂아주는 함수
+    let searchMarker;
+    let searchOverlay; // ✨ 장소 이름 말풍선을 담을 변수 추가!
+
+    // ✨ 인자에 placeName(장소 이름) 추가!
+    function addSearchMarker(lat, lng, placeName) {
+      if (kakaoMap) {
+        clearSearchMarker(); // 기존 핀과 말풍선 싹 지우기
+        
+        var moveLatLon = new kakao.maps.LatLng(lat, lng);
+        
+        // ✨ 1. [수정됨] 에러를 뿜던 image 속성을 아예 삭제! 카카오 기본 핀이 꽂힙니다.
+        searchMarker = new kakao.maps.Marker({
+          map: kakaoMap,
+          position: moveLatLon
+        });
+
+        // 2. ✨ 핀 밑에 예쁜 이름표(말풍선) 달아주기
+        if (placeName) {
+          // 말풍선 디자인 (원하는 대로 CSS 수정 가능!)
+          var content = `
+            <div style="background-color: white; padding: 4px 12px; border-radius: 20px; 
+                        border: 1.5px solid #007AFF; box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+                        font-size: 13px; font-weight: bold; color: #007AFF; margin-top: 5px;">
+              ${placeName}
+            </div>
+          `;
+
+          searchOverlay = new kakao.maps.CustomOverlay({
+            map: kakaoMap,
+            position: moveLatLon,
+            content: content,
+            yAnchor: 0 // ✨ 0으로 설정하면 핀 '밑'에 말풍선이 매달립니다!
+          });
+        }
+
+        kakaoMap.panTo(moveLatLon); 
+      }
+    }
+
+    function clearSearchMarker() {
+      if (searchMarker) {
+        searchMarker.setMap(null);
+        searchMarker = null;
+      }
+      // 핀 지울 때 이름표(말풍선)도 같이 지워줌
+      if (searchOverlay) {
+        searchOverlay.setMap(null);
+        searchOverlay = null;
+      }
+    }
+
+    // 상세페이지 열릴 때 바텀시트에 핀이 가려지지 않도록 지도를 위로 밀어주는 함수
+    function panMapForDetail() {
+      if (kakaoMap) {
+        // 화면 Y축 기준으로 지도를 아래로 120픽셀 밀면, 결과적으로 핀이 위로 올라옵니다!
+        kakaoMap.panBy(0, 120); 
       }
     }
   </script>
