@@ -7,11 +7,11 @@ import '../widgets/category_item.dart';
 import '../theme/app_colors.dart';
 import '../providers/restaurant_provider.dart';
 import 'restaurant_detail_screen.dart';
-import 'favorite_screen.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../screens/map_screen.dart';
 import 'package:matjib_app/services/kakao_api_service.dart';
 import 'dart:js' as js;
+import 'dart:convert';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -23,12 +23,14 @@ class MainScreen extends ConsumerStatefulWidget {
 // *변경 코드1* 지도를 부드럽게 움직이려면 with TickerProviderStateMixin 필요
 class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStateMixin { 
   
-  int? _detailRestaurantId;
+  String? _detailRestaurantId;
+  String? _selectedRestaurantId;
   bool _isDetailOpen = false;
   FocusNode? _searchFocusNode;
   Position? _myPosition; // 내 진짜 위치 저장용
   bool _isLoadingLocation = true; // 로딩 상태
   bool _isKeepMode = false; // ✨ 킵(보관함) 모드 켜짐/꺼짐 상태
+  TextEditingController? _autoCompleteController;
 
   // *1번 여기까지*
   final TransformationController _mapController = TransformationController();
@@ -44,8 +46,6 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   late AnimationController _animationController;
   Animation<Matrix4>? _mapAnimation;
 
-  int? _selectedRestaurantId;
-
   final FocusNode _chatFocusNode = FocusNode();
   final TextEditingController _chatInputController = TextEditingController();
   bool _isChatActive = false; // 채팅창 활성화 여부
@@ -55,19 +55,49 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _animationController.addListener(() {
-      if (_mapAnimation != null) {
-        _mapController.value = _mapAnimation!.value; // 애니메이션 값에 따라 지도 화면을 갱신
-      }
+    _initApp(); 
+
+    js.context['onMarkerClicked'] = js.allowInterop((String clickedId) {
+      print('🎯 마커 클릭됨! 식당 ID: $clickedId');
+      
+      // 1. 현재 화면에 떠있는 리스트에서 클릭된 식당의 진짜 데이터(위도/경도)를 찾아옵니다.
+      final displayList = _isKeepMode 
+          ? (ref.read(filteredRestaurantsProvider).value?.where((r) => r.isFavorite).toList() ?? [])
+          : (ref.read(filteredRestaurantsProvider).value ?? []);
+          
+      final clickedRestaurant = displayList.firstWhere((r) => r.id == clickedId);
+
+      setState(() {
+        _detailRestaurantId = clickedId;
+        _selectedRestaurantId = clickedId; // 🚀 내부에 선택 상태 각인!
+        _isDetailOpen = true; 
+      });
+      
+      // 2. 다른 핀들을 싹 숨기고, 선택된 이 핀만 빨갛고 크게 만듭니다.
+      _syncMarkers(); 
+
+      // 3. 지도를 꿀렁임 없이, 딱 한 번만 정가운데로 부드럽게 이동시킵니다!
+      js.context.callMethod('moveMap', [clickedRestaurant.latitude, clickedRestaurant.longitude, 3]);
+
+      // 4. 바텀시트를 상세 모드(0.65)로 예쁘게 올려줍니다.
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (_sheetController.isAttached) {
+          _sheetController.animateTo(
+            0.65, 
+            duration: const Duration(milliseconds: 400), 
+            curve: Curves.easeOutCubic
+          );
+        }
+      });
     });
-    _initApp();
   }
 
   // ✨ 로딩 화면 -> 위치 찾기 -> 지도 열기
   void _initApp() async {
     // 1. 내 위치 가져오기 (권한 허용 기다림)
-    _myPosition = await LocationService.getCurrentLocation();
+    _myPosition = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high, 
+    );
     
     // 2. 위치를 성공적으로 찾았다면?
     if (_myPosition != null) {
@@ -78,6 +108,29 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
     // 3. 로딩 끝! 화면 다시 그리기 (이제 지도가 렌더링됨)
     setState(() {
       _isLoadingLocation = false; 
+    });
+
+    // 🚀 [핵심 추가] 지도가 화면에 그려질 시간(약 0.8초)을 잠깐 기다렸다가, 처음 핀을 강제로 꽂아줍니다!
+    Future.delayed(const Duration(milliseconds: 800), () {
+      // 1. 현재 불러와져 있는 식당 리스트를 슬쩍 가져옵니다.
+      final initialRestaurants = ref.read(filteredRestaurantsProvider).value;
+      
+      // 2. 데이터가 있다면 자바스크립트로 전송!
+      if (initialRestaurants != null && initialRestaurants.isNotEmpty) {
+        final markerData = initialRestaurants.map((r) => {
+          'id': r.id,
+          'latitude': r.latitude,
+          'longitude': r.longitude,
+          'name': r.name,
+          'bestGrade': r.bestGrade,
+        }).toList();
+        
+        js.context.callMethod('setRestaurantMarkers', [json.encode(markerData)]);
+
+        if (_myPosition != null) {
+          js.context.callMethod('moveMap', [_myPosition!.latitude, _myPosition!.longitude]);
+        }
+      }
     });
 
     // 로딩이 끝나면 백그라운드에서 실시간 위치 추적(레이더) 시작!
@@ -92,6 +145,37 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
       _myPosition = position; 
       js.context.callMethod('updateUserMarker', [position.latitude, position.longitude]);
     });
+  }
+
+  // 🚀 [목표 1, 3 해결] 화면 상태(Keep, 상세창, 선택)를 싹 다 파악해서 핀을 그려주는 전담 매니저!
+  void _syncMarkers() {
+    final restaurants = ref.read(filteredRestaurantsProvider).value ?? [];
+    if (restaurants.isEmpty) {
+      js.context.callMethod('setRestaurantMarkers', ['[]']);
+      return;
+    }
+
+    // ① Keep 모드 필터링 (킵 켜지면 하트 누른 식당만 남김)
+    List<Restaurant> displayList = _isKeepMode 
+        ? restaurants.where((r) => r.isFavorite).toList() 
+        : restaurants;
+
+    // ② 상세 화면 필터링 (상세창 열리면 그 식당 1개만 덜렁 남김)
+    if (_isDetailOpen && _detailRestaurantId != null) {
+      displayList = displayList.where((r) => r.id == _detailRestaurantId).toList();
+    }
+
+    // ③ 선택 유무(빨간불) 정보를 포함해서 JS로 전송
+    final markerData = displayList.map((r) => {
+      'id': r.id,
+      'latitude': r.latitude,
+      'longitude': r.longitude,
+      'name': r.name,
+      'bestGrade': r.bestGrade,
+      'isSelected': (r.id == _selectedRestaurantId || r.id == _detailRestaurantId), // 👈 이게 JS에서 핀을 키워줍니다!
+    }).toList();
+
+    js.context.callMethod('setRestaurantMarkers', [json.encode(markerData)]);
   }
 
   // ✨ [추가] 나중에 '내 위치로 돌아가기' 버튼을 누르면 실행할 함수!
@@ -139,47 +223,21 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
     });
   }
 
+  // ✨ 리스트에서 식당을 클릭했을 때 지도를 움직이는 함수
   void _animateMapToRestaurant(Restaurant restaurant) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    // 🚀 1. 복잡했던 Matrix4 계산 코드는 전부 삭제!
+    // 진짜 카카오맵에게 "이 식당 좌표로 이동하고, 건물 앞까지 가깝게 '줌인(레벨 3)' 해줘!" 라고 명령합니다.
+    js.context.callMethod('moveMap', [restaurant.latitude, restaurant.longitude, 3]);
 
-    // 1. 지도 컨테이너 기준 핀의 x, y 좌표
-    final double targetTop = (37.5000 - restaurant.latitude) * 100000 + 100;
-    final double targetLeft = (restaurant.longitude - 127.0250) * 100000 + 100;
-
-    // 2. 핀 자체의 크기를 감안한 진짜 '핀의 정중앙' 좌표
-    final double pinCenterX = targetLeft;
-    final double pinCenterY = targetTop + 15;  
-
-    const double targetScale = 2.5;
-
-    // 바텀시트가 0.45(45%)까지 올라와서 화면 하단을 가리고 있으므로,
-    // 지도가 보이는 상단 55% 공간의 시각적 정중앙인 0.27(27%) 위치를 타겟으로 잡음
-    final double visualCenterY = screenHeight * 0.27; 
-    
-    final double targetX = (screenWidth / 2) - (pinCenterX * targetScale);
-    final double targetY = visualCenterY - (pinCenterY * targetScale);
-
-    final targetMatrix = Matrix4.identity()
-      ..setTranslationRaw(targetX, targetY, 0.0)
-      ..scale(targetScale);
-
-    _mapAnimation = Matrix4Tween(
-      begin: _mapController.value,
-      end: targetMatrix,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOutCubic,
-    ));
-
-    _animationController.forward(from: 0);
-
-    // 바텀 시트 내리기
-    _sheetController.animateTo(
-      0.45, 
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOut,
-    );
+    // 🚀 2. 바텀 시트 조절 기능은 원본 그대로 유지!
+    // 맛집 정보와 지도가 한눈에 보기 좋게 바텀시트 높이를 0.45 비율로 스르륵 맞춰줍니다.
+    if (_sheetController.isAttached) {
+      _sheetController.animateTo(
+        0.45, 
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic, // 기존보다 조금 더 부드러운 감속 곡선 적용
+      );
+    }
   }
 
   void _animateToMyLocation() {
@@ -213,53 +271,65 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   }
   // *4번 여기까지*
 
-  // ✨ 검색 처리 함수
+  // ✨ 검색 처리 함수 (식당 vs 랜드마크 자동 분류)
+  // ✨ 검색 처리 함수 (빛의 속도로 타이핑해도 엇나가지 않음!)
   void _handleSearch(String keyword) async {
-    FocusScope.of(context).unfocus(); // 키보드 내리기
+    FocusScope.of(context).unfocus(); 
     if (keyword.trim().isEmpty) return;
     
     setState(() {
       _selectedRestaurantId = null;
       _detailRestaurantId = null;
+      _isDetailOpen = false;
     });
 
-    print('📍 "$keyword" 위치 찾는 중...');
-    final result = await KakaoApiService.searchPlace(keyword);
-    
-    if (result != null) {
-      // 1. 기존 moveMap 대신, 방금 만든 '핀 꽂고 이동하는 함수' 실행!
-      js.context.callMethod('addSearchMarker', [
-        result['lat'], 
-        result['lng'], 
-        result['name'] // 👈 추가된 부분!
-      ]);
-      
-      // 3. (선택) 검색창이 상세 모드였다면 기본 모드로 닫아주기
-      setState(() {
-        _isDetailOpen = false;
-      });
+    // 🚀 [1번 버그 해결] 필터링이 덜 끝난 '현재 화면 리스트'를 믿지 말고,
+    // '전체 원본 리스트'에서 방금 입력한 keyword가 포함된 식당을 직접 0.001초 만에 솎아냅니다!
+    final allRestaurants = ref.read(restaurantProvider).value ?? [];
+    final matchedRestaurants = allRestaurants.where((r) => r.name.contains(keyword)).toList();
 
-      // ✨ [핵심] 화면이 새로 다 그려진 후, 딱 0.1초 뒤에 안정적으로 바텀시트를 올립니다.
+    // 🍔 우리 데이터에 일치하는 식당이 있다? -> '식당 검색 모드'
+    if (matchedRestaurants.isNotEmpty) {
+      print('🍔 식당 검색으로 인식됨: "$keyword"');
+      
+      // 🚀 검색어를 리버팟 창고에 강제로 즉시 밀어 넣어서 동기화를 완벽하게 맞춥니다.
+      ref.read(searchQueryProvider.notifier).updateQuery(keyword);
+
+      // 내가 찾은 식당 목록 중 첫 번째 식당으로 이동!
+      final targetRestaurant = matchedRestaurants.first;
+      js.context.callMethod('moveMap', [targetRestaurant.latitude, targetRestaurant.longitude, 3]);
+      
+      _syncMarkers(); 
+
       Future.delayed(const Duration(milliseconds: 400), () {
-        // 화면이 안전한 상태인지 한 번 더 확인 (mounted)
         if (mounted && _sheetController.isAttached) {
-          _sheetController.animateTo(
-            0.45, 
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-          );
+          _sheetController.animateTo(0.45, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
         }
       });
-
-      // ✨ 4. [미래에 추가될 코드] 리버팟에게 "새 좌표 주변 맛집으로 데이터 새로고침 해줘!" 라고 명령
-      // ref.read(restaurantListProvider.notifier).fetchRestaurantsAround(result['lat'], result['lng']);
+    } 
+    // 📍 일치하는 식당이 하나도 없다? -> '랜드마크 검색 모드'
+    else {
+      print('📍 랜드마크 검색으로 인식됨: "$keyword"');
+      final result = await KakaoApiService.searchPlace(keyword);
       
-    } else {
-      // 검색 실패 시
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('앗! "$keyword" 위치를 찾을 수 없어요. 😢')),
-        );
+      if (result != null) {
+        js.context.callMethod('moveMap', [result['lat'], result['lng'], 5]);
+        
+        ref.read(searchQueryProvider.notifier).updateQuery(''); 
+        ref.read(categoryProvider.notifier).toggleCategory(''); 
+        _autoCompleteController?.clear();
+
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted && _sheetController.isAttached) {
+            _sheetController.animateTo(0.45, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('앗! "$keyword" 위치를 찾을 수 없어요. 😢')),
+          );
+        }
       }
     }
   }
@@ -354,6 +424,11 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
 
   @override
   Widget build(BuildContext context) {
+    
+    ref.listen(filteredRestaurantsProvider, (previous, next) {
+      _syncMarkers();
+    });
+
     final selectedCategory = ref.watch(categoryProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
 
@@ -440,19 +515,18 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             children:[
               // 1층: 카카오 지도 배경
 
-              Positioned.fill(
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                // 상세 페이지 열릴 때 지도를 위로 밀어올리는 효과
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                // ✨ 2. 지도를 숨기는 Offstage 위젯을 이 안쪽으로 쏙 넣어줍니다!
                 child: Offstage(
                   offstage: _isChatActive, // 채팅창 열리면 지도 렌더링 잠시 멈춤
-                  child: AnimatedPositioned(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    // 상세 페이지 열릴 때 지도를 위로 밀어올리는 효과
-                    top: _isDetailOpen ? -150 : 0,
-                    bottom: _isDetailOpen ? 150 : 0,
-                    left: 0,
-                    right: 0,
-                    child: const MapScreen(), // 👈 HtmlElementView 대신 이미 만들어둔 MapScreen 하나만 씁니다!
-                  ),
+                  child: const MapScreen(), // 👈 이미 만들어둔 MapScreen
                 ),
               ),
               // *여기까지 8번*
@@ -537,6 +611,9 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                 height: 50,
                                 // 🌟 상태 2: 평소 화면 - 긴 Autocomplete 검색창
                                 child: Autocomplete<String>(
+                                  // 🚀 [핵심 1] 화면이 다시 그려질 때(상세화면을 열었다 닫을 때 등), 리버팟에 저장된 검색어를 텍스트창에 짠! 하고 채워줍니다.
+                                  initialValue: TextEditingValue(text: ref.read(searchQueryProvider)),
+
                                   // 1. 검색어 필터링 로직
                                   optionsBuilder: (TextEditingValue textEditingValue) {
                                     if (textEditingValue.text.isEmpty) {
@@ -552,9 +629,11 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                     _handleSearch(selection);
                                   },
                                   
-                                  // 3. 기존 검색창 UI 유지
+                                  // 3. 기존 검색창 UI 유지 + 지우기(X) 버튼 추가
                                   fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
                                     _searchFocusNode = focusNode;
+                                    _autoCompleteController = textEditingController;
+                                    
                                     return Container(
                                       height: 50, 
                                       decoration: BoxDecoration(
@@ -571,16 +650,56 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                             child: TextField(
                                               controller: textEditingController, 
                                               focusNode: focusNode,
+                                              textAlignVertical: TextAlignVertical.center,
+
+                                              onTap: () {
+                                                // 상세 화면이 열려있거나 핀이 선택된 상태라면?
+                                                if (_isDetailOpen || _selectedRestaurantId != null) {
+                                                  setState(() {
+                                                    _isDetailOpen = false; // 상세 화면 닫기
+                                                    _detailRestaurantId = null; // 핀 선택 취소
+                                                    _selectedRestaurantId = null; 
+                                                  });
+                                                  
+                                                  _syncMarkers(); // 핀 색상과 크기를 원래대로 싹 되돌림!
+
+                                                  // 바텀시트도 다시 리스트 보기 편한 기본 높이(0.45)로 스르륵 내려줍니다.
+                                                  if (_sheetController.isAttached) {
+                                                    _sheetController.animateTo(
+                                                      0.45, 
+                                                      duration: const Duration(milliseconds: 300), 
+                                                      curve: Curves.easeOutCubic
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              
                                               onChanged: (value) {
                                                 ref.read(searchQueryProvider.notifier).updateQuery(value);
                                               },
                                               onSubmitted: (value) {
                                                 _handleSearch(value);
                                               },
-                                              decoration: const InputDecoration(
+                                              // 🚀 [핵심 2] const를 빼고 suffixIcon을 추가합니다!
+                                              decoration: InputDecoration(
+                                                isDense: true,
+                                                contentPadding: const EdgeInsets.symmetric(vertical: 12),
                                                 hintText: '음식점, 주소 검색', 
-                                                hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14), 
-                                                border: InputBorder.none
+                                                hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14), 
+                                                border: InputBorder.none,
+                                                // 검색창에 글자가 한 글자라도 있으면 우측에 'X' 버튼을 띄워줍니다.
+                                                suffixIcon: textEditingController.text.isNotEmpty
+                                                    ? IconButton(
+                                                        icon: const Icon(Icons.cancel, color: Colors.grey, size: 20),
+                                                        onPressed: () {
+                                                          // X 버튼을 누르면 텍스트를 비우고, 필터를 초기화하며, 지도 핀도 싹 새로고침합니다!
+                                                          textEditingController.clear();
+                                                          ref.read(searchQueryProvider.notifier).updateQuery('');
+                                                          ref.read(categoryProvider.notifier).toggleCategory('');
+                                                          _syncMarkers();
+                                                        },
+                                                      )
+                                                    : null,
                                               ),
                                             ),
                                           ),
@@ -593,37 +712,42 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                   optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
                                     return Align(
                                       alignment: Alignment.topLeft,
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: Container(
-                                          margin: const EdgeInsets.only(top: 8), 
-                                          decoration: BoxDecoration(
-                                            color: AppColors.background,
-                                            borderRadius: BorderRadius.circular(20),
-                                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                                          ),
-                                          constraints: BoxConstraints(maxHeight: 200, maxWidth: MediaQuery.of(context).size.width - 110),
-                                          child: ListView.builder(
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
-                                            shrinkWrap: true,
-                                            itemCount: options.length,
-                                            itemBuilder: (BuildContext context, int index) {
-                                              final String option = options.elementAt(index);
-                                              return InkWell(
-                                                onTap: () => onSelected(option),
-                                                borderRadius: BorderRadius.circular(10),
-                                                child: Padding(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                                  child: Row(
-                                                    children: [
-                                                      const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
-                                                      const SizedBox(width: 10),
-                                                      Text(option, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
-                                                    ],
+                                      // 🚀 [2번 버그 해결] 허공이나 테두리를 터치해도 신호가 아래층 지도로 새어나가지 않게 완벽 차단!
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque, // 빈 공간도 터치를 인식하게 만듦
+                                        onTap: () {}, // 아무 일도 안 하는 빈 함수로 터치를 꿀꺽 삼킵니다.
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: Container(
+                                            margin: const EdgeInsets.only(top: 8), 
+                                            decoration: BoxDecoration(
+                                              color: AppColors.background,
+                                              borderRadius: BorderRadius.circular(20),
+                                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                            ),
+                                            constraints: BoxConstraints(maxHeight: 200, maxWidth: MediaQuery.of(context).size.width - 110),
+                                            child: ListView.builder(
+                                              padding: const EdgeInsets.symmetric(vertical: 8),
+                                              shrinkWrap: true,
+                                              itemCount: options.length,
+                                              itemBuilder: (BuildContext context, int index) {
+                                                final String option = options.elementAt(index);
+                                                return InkWell(
+                                                  onTap: () => onSelected(option),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                    child: Row(
+                                                      children: [
+                                                        const Icon(Icons.search, size: 16, color: AppColors.textSecondary),
+                                                        const SizedBox(width: 10),
+                                                        Text(option, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                                                      ],
+                                                    ),
                                                   ),
-                                                ),
-                                              );
-                                            },
+                                                );
+                                              },
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -654,7 +778,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                         _isDetailOpen = false; 
                       }
                     });
-                    
+                    _syncMarkers();
                   },
                   child: AnimatedContainer( // ✨ 색상 변화를 부드럽게 주기 위해 AnimatedContainer로 업그레이드!
                     duration: const Duration(milliseconds: 200),
@@ -714,7 +838,21 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                             Container(
                               child: asyncDisplayedRestaurants.when(
                                 loading: () => Column(children:[buildSheetHeader(0), const Expanded(child: Center(child: CircularProgressIndicator(color: AppColors.primary)))]),
-                                error: (error, stack) => Column(children:[buildSheetHeader(0), Expanded(child: Center(child: Text('서버와 연결할 수 없어요 😢\n$error', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.error))))]),
+                                // ✨ 수정할 코드 (컨트롤러를 달아주고, 진짜 에러 내용을 화면에 출력합니다!)
+                                error: (err, stack) => SingleChildScrollView(
+                                  controller: scrollController, // 🚀 이게 있어야 에러 화면에서도 바텀시트가 움직입니다!
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  child: Container(
+                                    height: 300, // 드래그할 수 있는 충분한 공간 확보
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.all(20),
+                                    child: Text(
+                                      '앗! 데이터를 못 불러왔어요.\n\n이유: $err', // 🚀 여기에 진짜 에러 원인이 뜹니다!
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ),
                                 data: (restaurants) {
                                   // ✨ 1. Keep 모드가 켜져있으면 하트(isFavorite) 누른 것만 추려냅니다.
                                   final displayList = _isKeepMode 
@@ -764,9 +902,9 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                             _detailRestaurantId = restaurant.id;
                                                             _isDetailOpen = true; 
                                                           });
-                                                          
-                                                          // 🗺️ [1번 버그 해결] 상세창이 열릴 때 지도를 위로 슬쩍 밀어 올려서 핀이 보이게 합니다!
-                                                          js.context.callMethod('panMapForDetail');
+                                                          _syncMarkers();
+
+                                                          js.context.callMethod('moveMap', [restaurant.latitude, restaurant.longitude, 3]);
 
                                                           Future.delayed(const Duration(milliseconds: 50), () {
                                                             if (_sheetController.isAttached) { 
@@ -781,9 +919,11 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                           // 🏢 2. 카드를 '처음' 탭했을 때 (선택 + 지도 이동 + 시트 0.45 정렬)
                                                           setState(() => _selectedRestaurantId = restaurant.id);
                                                           
-                                                          // 지도를 해당 음식점 정중앙으로 이동
-                                                          _animateMapToRestaurant(restaurant);
+                                                          _syncMarkers();
                                                           
+                                                          // 🚀 _animateMapToRestaurant 대신 직접 호출! (중복 제거)
+                                                          js.context.callMethod('moveMap', [restaurant.latitude, restaurant.longitude, 3]);
+
                                                           if (_sheetController.isAttached) {
                                                             _sheetController.animateTo(
                                                               0.45, 
@@ -844,7 +984,10 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                         onBack: () {
                                           setState(() {
                                             _isDetailOpen = false; 
+                                            _detailRestaurantId = null;
+                                            _selectedRestaurantId = null;
                                           });
+                                          _syncMarkers();
                                           // 자석 배열이 평소 상태로 돌아올 때까지 0.05초 기다렸다가 0.45로 스윽 내립니다.
                                           Future.delayed(const Duration(milliseconds: 50), () {
                                             if (_sheetController.isAttached) {

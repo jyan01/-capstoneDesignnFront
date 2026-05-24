@@ -50,4 +50,4 @@ class CategoryItem extends StatelessWidget {
       ),
     );
   }
-} // 👈 아까 복붙하시면서 이 마지막 괄호가 날아갔을 확률 99.9%입니다! 😆
+} 

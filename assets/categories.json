@@ -1,0 +1,272 @@
+[
+  {
+    "name": "막국수",
+    "query": "원주 막국수",
+    "total_count": 100,
+    "main_page_index": 1
+  },
+  {
+    "name": "빵",
+    "query": "원주 빵",
+    "total_count": 100,
+    "main_page_index": 2
+  },
+  {
+    "name": "만두",
+    "query": "원주 만두",
+    "total_count": 100,
+    "main_page_index": 3
+  },
+  {
+    "name": "카페",
+    "query": "원주 카페",
+    "total_count": 100,
+    "main_page_index": 4
+  },
+  {
+    "name": "보리밥정식",
+    "query": "원주 보리밥정식",
+    "total_count": 20,
+    "main_page_index": 5
+  },
+  {
+    "name": "옹심이",
+    "query": "원주 옹심이",
+    "total_count": 46,
+    "main_page_index": 6
+  },
+  {
+    "name": "핸드드립",
+    "query": "원주 핸드드립",
+    "total_count": 68,
+    "main_page_index": 7
+  },
+  {
+    "name": "닭갈비",
+    "query": "원주 닭갈비",
+    "total_count": 100,
+    "main_page_index": 8
+  },
+  {
+    "name": "알탕",
+    "query": "원주 알탕",
+    "total_count": 59,
+    "main_page_index": 9
+  },
+  {
+    "name": "나물",
+    "query": "원주 나물",
+    "total_count": 99,
+    "main_page_index": 10
+  },
+  {
+    "name": "돈카츠",
+    "query": "원주 돈카츠",
+    "total_count": 100,
+    "main_page_index": 11
+  },
+  {
+    "name": "곤이",
+    "query": "원주 곤이",
+    "total_count": 36,
+    "main_page_index": 12
+  },
+  {
+    "name": "소바",
+    "query": "원주 소바",
+    "total_count": 78,
+    "main_page_index": 13
+  },
+  {
+    "name": "돼지갈비",
+    "query": "원주 돼지갈비",
+    "total_count": 100,
+    "main_page_index": 14
+  },
+  {
+    "name": "한우",
+    "query": "원주 한우",
+    "total_count": 100,
+    "main_page_index": 15
+  },
+  {
+    "name": "칼국수",
+    "query": "원주 칼국수",
+    "total_count": 100,
+    "main_page_index": 16
+  },
+  {
+    "name": "일본가정식",
+    "query": "원주 일본가정식",
+    "total_count": 8,
+    "main_page_index": 17
+  },
+  {
+    "name": "브런치",
+    "query": "원주 브런치",
+    "total_count": 100,
+    "main_page_index": 18
+  },
+  {
+    "name": "소고기",
+    "query": "원주 소고기",
+    "total_count": 100,
+    "main_page_index": 19
+  },
+  {
+    "name": "일식당",
+    "query": "원주 일식당",
+    "total_count": 100,
+    "main_page_index": 20
+  },
+  {
+    "name": "한정식",
+    "query": "원주 한정식",
+    "total_count": 79,
+    "main_page_index": 21
+  },
+  {
+    "name": "사케동",
+    "query": "원주 사케동",
+    "total_count": 19,
+    "main_page_index": 22
+  },
+  {
+    "name": "군만두",
+    "query": "원주 군만두",
+    "total_count": 100,
+    "main_page_index": 23
+  },
+  {
+    "name": "설렁탕",
+    "query": "원주 설렁탕",
+    "total_count": 48,
+    "main_page_index": 24
+  },
+  {
+    "name": "순두부",
+    "query": "원주 순두부",
+    "total_count": 100,
+    "main_page_index": 25
+  },
+  {
+    "name": "메밀칼국수",
+    "query": "원주 메밀칼국수",
+    "total_count": 16,
+    "main_page_index": 26
+  },
+  {
+    "name": "보쌈",
+    "query": "원주 보쌈",
+    "total_count": 100,
+    "main_page_index": 27
+  },
+  {
+    "name": "짬뽕",
+    "query": "원주 짬뽕",
+    "total_count": 100,
+    "main_page_index": 28
+  },
+  {
+    "name": "분식",
+    "query": "원주 분식",
+    "total_count": 100,
+    "main_page_index": 29
+  },
+  {
+    "name": "초밥",
+    "query": "원주 초밥",
+    "total_count": 100,
+    "main_page_index": 30
+  },
+  {
+    "name": "밥집",
+    "query": "원주 밥집",
+    "total_count": 100,
+    "main_page_index": 31
+  },
+  {
+    "name": "술집",
+    "query": "원주 술집",
+    "total_count": 100,
+    "main_page_index": 32
+  },
+  {
+    "name": "고깃집",
+    "query": "원주 고깃집",
+    "total_count": 100,
+    "main_page_index": 33
+  },
+  {
+    "name": "한식",
+    "query": "원주 한식",
+    "total_count": 100,
+    "main_page_index": 34
+  },
+  {
+    "name": "양식",
+    "query": "원주 양식",
+    "total_count": 100,
+    "main_page_index": 35
+  },
+  {
+    "name": "중식",
+    "query": "원주 중식",
+    "total_count": 100,
+    "main_page_index": 36
+  },
+  {
+    "name": "국물요리",
+    "query": "원주 국물요리",
+    "total_count": 100,
+    "main_page_index": 37
+  },
+  {
+    "name": "해산물",
+    "query": "원주 해산물",
+    "total_count": 100,
+    "main_page_index": 38
+  },
+  {
+    "name": "면요리",
+    "query": "원주 면요리",
+    "total_count": 100,
+    "main_page_index": 39
+  },
+  {
+    "name": "이탈리안",
+    "query": "원주 이탈리안",
+    "total_count": 35,
+    "main_page_index": 40
+  },
+  {
+    "name": "뷔페",
+    "query": "원주 뷔페",
+    "total_count": 64,
+    "main_page_index": 41
+  },
+  {
+    "name": "태국음식",
+    "query": "원주 태국음식",
+    "total_count": 17,
+    "main_page_index": 42
+  },
+  {
+    "name": "베트남음식",
+    "query": "원주 베트남음식",
+    "total_count": 54,
+    "main_page_index": 43
+  },
+  {
+    "name": "패스트푸드",
+    "query": "원주 패스트푸드",
+    "total_count": 100,
+    "main_page_index": 44
+  },
+  {
+    "name": "멕시칸",
+    "query": "원주 멕시칸",
+    "total_count": 22,
+    "main_page_index": 45
+  }
+]

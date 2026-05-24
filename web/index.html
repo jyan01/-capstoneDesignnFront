@@ -62,12 +62,19 @@
       });
     }
 
-    // 버튼 누를 때 지도를 부드럽게 이동 (기존과 동일)
-    function moveMap(lat, lng) {
-      if (kakaoMap) {
-        kakaoMap.panTo(new kakao.maps.LatLng(lat, lng)); 
+    window.moveMap = function(lat, lng, level) {
+      if (!kakaoMap) return;
+
+      var targetLatLon = new kakao.maps.LatLng(lat, lng);
+
+      // 1. 줌 레벨 맞추기
+      if (typeof level === 'number' && level > 0) {
+        kakaoMap.setLevel(level); 
       }
-    }
+
+      // 2. 다른 계산 없이 그냥 그 좌표 정가운데로 촥! 날아갑니다.
+      kakaoMap.panTo(targetLatLon);
+    };
 
     // ✨ [추가] 내가 걸어갈 때 지도 화면은 가만히 있고 '파란 점'만 쫄쫄쫄 따라가게 하는 함수!
     function updateUserMarker(lat, lng) {
@@ -135,6 +142,65 @@
         kakaoMap.panBy(0, 120); 
       }
     }
+
+    var currentMarkers = []; // 현재 떠있는 마커 관리 배열
+
+    // ✨ 플러터에서 걸러진 식당 JSON 배열을 받아 마커를 꽂는 전담 함수
+    window.setRestaurantMarkers = function(restaurantsJson) {
+      if (!kakaoMap) return;
+      
+      for (var i = 0; i < currentMarkers.length; i++) {
+        currentMarkers[i].setMap(null);
+      }
+      currentMarkers = [];
+
+      var restaurants = JSON.parse(restaurantsJson);
+      
+      restaurants.forEach(function(res) {
+        var markerPosition = new kakao.maps.LatLng(res.latitude, res.longitude);
+        
+        // 금/은/동 바탕색 결정
+        var outerColor = "#FFC107"; // 기본 금색
+        if (res.bestGrade === "silver") outerColor = "#9E9E9E"; // 은색
+        if (res.bestGrade === "bronze") outerColor = "#CD7F32"; // 동색
+
+        // ✨ 선택된 핀이면 크기를 1.3배 키우고, 안쪽 동그라미를 빨간색으로!
+        var scale = res.isSelected ? 1.3 : 1.0;
+        var innerColor = res.isSelected ? "#FF3B30" : "#FFFFFF"; 
+
+        var width = 30 * scale;
+        var height = 40 * scale;
+
+        // 예쁜 물방울 모양 맵 핀 SVG 코드를 실시간으로 찍어냅니다
+        var svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 30 40">
+            <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 25 15 25s15-13.8 15-25C30 6.7 23.3 0 15 0z" fill="${outerColor}" stroke="#ffffff" stroke-width="2"/>
+            <circle cx="15" cy="15" r="6" fill="${innerColor}"/>
+        </svg>`;
+
+        var markerImage = new kakao.maps.MarkerImage(
+          "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon),
+          new kakao.maps.Size(width, height),
+          {offset: new kakao.maps.Point(width / 2, height)}
+        );
+
+        var marker = new kakao.maps.Marker({
+          position: markerPosition,
+          image: markerImage,
+          zIndex: res.isSelected ? 99 : 1, // ✨ 선택된 핀이 무조건 위로 올라오게!
+          title: res.name 
+        });
+        
+        marker.setMap(kakaoMap);
+        currentMarkers.push(marker);
+
+        kakao.maps.event.addListener(marker, 'click', function() {
+          if (window.onMarkerClicked) {
+            window.onMarkerClicked(res.id); // 플러터야, 이 식당 ID 클릭됐어! 끝.
+          }
+        });
+      });
+    }
+
   </script>
 </head>
 <body>
