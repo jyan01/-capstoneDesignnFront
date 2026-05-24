@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 class KakaoApiService {
   // ✨ 아까 복사해둔 본인의 'REST API 키'를 여기에 넣으세요! 
   // (따옴표 안에 넣어주시면 됩니다.)
-  static const String _restApiKey = 'REST_API_KRY';
+  static const String _restApiKey = 'a5824d8b04066d3653ac41abe4278f68';
 
   // 랜드마크(키워드)를 검색해서 위도, 경도 좌표를 가져오는 함수
   static Future<Map<String, dynamic>?> searchPlace(String keyword) async {

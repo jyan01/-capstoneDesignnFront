@@ -29,6 +29,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with TickerProviderStat
   Position? _myPosition; // 내 진짜 위치 저장용
   bool _isLoadingLocation = true; // 로딩 상태
   bool _isKeepMode = false; // ✨ 킵(보관함) 모드 켜짐/꺼짐 상태
+  bool _isCategoryExpanded = false; // ✨ [여기 추가!] 카테고리 드롭다운 열림/닫힘 상태 기억
 
   // *1번 여기까지*
   final TransformationController _mapController = TransformationController();
@@ -356,26 +357,63 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
   Widget build(BuildContext context) {
     final selectedCategory = ref.watch(categoryProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
-
-    // *변경 코드6*
+// *변경 코드6*
     Widget buildSheetHeader(int count) {
+      final categoryWidgets = [
+        CategoryItem(title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
+        CategoryItem(title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
+        CategoryItem(title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
+        CategoryItem(title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
+        CategoryItem(title: '아시안', isSelected: selectedCategory == '아시안', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('아시안')),
+        CategoryItem(title: '멕시칸', isSelected: selectedCategory == '멕시칸', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('멕시칸')),
+        CategoryItem(title: '분식', isSelected: selectedCategory == '분식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('분식')),
+        CategoryItem(title: '카페·디저트', isSelected: selectedCategory == '카페·디저트', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('카페·디저트')),
+        CategoryItem(title: '치킨', isSelected: selectedCategory == '치킨', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('치킨')),
+        CategoryItem(title: '피자·버거', isSelected: selectedCategory == '피자·버거', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('피자·버거')),
+        CategoryItem(title: '고기·구이', isSelected: selectedCategory == '고기·구이', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('고기·구이')),
+        CategoryItem(title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
+      ];
+
       return GestureDetector(
         onVerticalDragUpdate: (details) {
           final screenHeight = MediaQuery.of(context).size.height;
           double newSize = _sheetController.size - (details.primaryDelta! / screenHeight);
-          _sheetController.jumpTo(newSize.clamp(0.14, 0.87));
+          // 최소 높이 0.22로 다시 복구!
+          _sheetController.jumpTo(newSize.clamp(0.22, 0.87));
         },
         onVerticalDragEnd: (details) {
           final currentSize = _sheetController.size;
-          const snapSizes = [0.14, 0.45, 0.87]; 
-          double closest = snapSizes.reduce((a, b) => 
-            (a - currentSize).abs() < (b - currentSize).abs() ? a : b
-          );
-          _sheetController.animateTo(
-            closest,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-          );
+          // ✨ 잃어버렸던 스와이프 속도(velocity) 감지 로직 완벽 복구!!
+          final velocity = details.primaryVelocity ?? 0;
+
+          // 위로 아주 살짝만(툭!) 스와이프 했을 때
+          if (velocity < -100) {
+            _sheetController.animateTo(
+              0.87, 
+              duration: const Duration(milliseconds: 250), 
+              curve: Curves.easeOutQuart,
+            );
+          } 
+          // 아래로 아주 살짝만(툭!) 스와이프 했을 때
+          else if (velocity > 100) {
+            _sheetController.animateTo(
+              0.22, 
+              duration: const Duration(milliseconds: 250), 
+              curve: Curves.easeOutQuart,
+            );
+          } 
+          // 천천히 움직이다 놓았을 때만 자석처럼 붙기
+          else {
+            const snapSizes = [0.22, 0.45, 0.87]; 
+            double closest = snapSizes.reduce((a, b) => 
+              (a - currentSize).abs() < (b - currentSize).abs() ? a : b
+            );
+            _sheetController.animateTo(
+              closest,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutQuart,
+            );
+          }
         },
         child: Container(
           color: Colors.transparent, 
@@ -384,41 +422,79 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
             children:[
               Center(child: Container(margin: const EdgeInsets.only(top: 15, bottom: 15), width: 40, height: 5, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(10)))),
               
-              // 📍 1. 타이틀 영역 ('근처 추천 맛집')
+              // 📍 1. 타이틀 & 드롭다운 버튼 영역
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20), 
                 alignment: Alignment.center,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children:[
-                    Text(selectedCategory.isEmpty ? '근처 추천 맛집' : '✨ 추천 $selectedCategory 맛집', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                    Text('총 $count곳', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary.withOpacity(0.7))),
+                    // 왼쪽: 타이틀
+                    Text(
+                      _isKeepMode 
+                          ? 'keep list 💖' 
+                          : (selectedCategory.isEmpty ? '근처 추천 맛집' : '✨ 추천 $selectedCategory 맛집'), 
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)
+                    ),
+                    
+                    // 오른쪽: 개수 + 화살표 애니메이션 버튼
+                    Row(
+                      children: [
+                        Text('총 $count곳', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary.withOpacity(0.7))),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isCategoryExpanded = !_isCategoryExpanded;
+                            });
+                          },
+                          child: AnimatedRotation(
+                            turns: _isCategoryExpanded ? 0.5 : 0.0, 
+                            duration: const Duration(milliseconds: 300),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+                              child: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 15), // 타이틀과 카테고리 사이 여백
+              const SizedBox(height: 15),
 
-              // 📍 2. 카테고리 리스트 영역 (여기로 이사 왔습니다!)
-              Container(
-                padding: const EdgeInsets.only(left: 20, bottom: 15),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children:[
-                      CategoryItem(title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
-                      CategoryItem(title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
-                      CategoryItem(title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
-                      CategoryItem(title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
-                      CategoryItem(title: '아시안', isSelected: selectedCategory == '아시안', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('아시안')),
-                      CategoryItem(title: '멕시칸', isSelected: selectedCategory == '멕시칸', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('멕시칸')),
-                      CategoryItem(title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
-                    ],
+              // 📍 2. 카테고리 리스트 영역
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 300),
+                firstCurve: Curves.easeOutCubic,
+                secondCurve: Curves.easeOutCubic,
+                sizeCurve: Curves.easeOutCubic,
+                crossFadeState: _isCategoryExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                
+                firstChild: Container(
+                  padding: const EdgeInsets.only(bottom: 15),
+                  width: double.infinity,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(children: categoryWidgets),
+                  ),
+                ),
+                
+                secondChild: Container(
+                  padding: const EdgeInsets.only(left: 20, right: 20, bottom: 15),
+                  width: double.infinity,
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: categoryWidgets,
                   ),
                 ),
               ),
               
-              // 하단 리스트와의 구분선
               Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
             ],
           ),
@@ -429,7 +505,7 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
  
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: false,
       body: _isLoadingLocation
         // 1. 위치 찾는 중일 때: 빙글빙글 로딩창 표시
         ? const Center(child: CircularProgressIndicator()) 
@@ -439,20 +515,16 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
           child: Stack(
             children:[
               // 1층: 카카오 지도 배경
-
               Positioned.fill(
-                child: Offstage(
-                  offstage: _isChatActive, // 채팅창 열리면 지도 렌더링 잠시 멈춤
-                  child: AnimatedPositioned(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    // 상세 페이지 열릴 때 지도를 위로 밀어올리는 효과
-                    top: _isDetailOpen ? -150 : 0,
-                    bottom: _isDetailOpen ? 150 : 0,
-                    left: 0,
-                    right: 0,
-                    child: const MapScreen(), // 👈 HtmlElementView 대신 이미 만들어둔 MapScreen 하나만 씁니다!
-                  ),
+                child: AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  // 상세 페이지 열릴 때 지도를 위로 밀어올리는 효과
+                  top: _isDetailOpen ? -150 : 0,
+                  bottom: _isDetailOpen ? 150 : 0,
+                  left: 0,
+                  right: 0,
+                  child: const MapScreen(), // 👈 HtmlElementView 대신 이미 만들어둔 MapScreen 하나만 씁니다!
                 ),
               ),
               // *여기까지 8번*
@@ -870,134 +942,160 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
               // *5번 여기까지*
               
               // *변경 코드9*
-              // 5.5층: 채팅 활성화 시 나타나는 오버레이 화면
+            // 5.5층: 아담한 플로팅 AI 채팅 위젯 (키보드 대응 완료 🚀)
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 400), 
-                curve: Curves.easeOutCubic, 
-                
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
                 top: _isChatActive ? 0 : MediaQuery.of(context).size.height,
-                bottom: _isChatActive ? 100 : -MediaQuery.of(context).size.height,
+                bottom: _isChatActive ? 0 : -MediaQuery.of(context).size.height,
                 left: 0,
                 right: 0,
-                
                 child: PointerInterceptor(
                   child: GestureDetector(
-                    onTap: () => _chatFocusNode.unfocus(), // 여백 누르면 키보드만 내리기
-                    child: Container(
-                      color: AppColors.background.withOpacity(0.95),
-                      child: SafeArea( 
-                        child: Column(
-                          children: [
-                            // 1. 상단 헤더 (뒤로가기 + 타이틀)
-                            Container(
-                              height: 60,
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 28),
-                                    onPressed: () {
-                                      // 1. 현재 포커스를 완전히 제거해서 키보드를 내립니다.
-                                      FocusManager.instance.primaryFocus?.unfocus(); 
-                                      
-                                      // 2. 약간의 시간차(키보드가 내려가는 물리적인 시간)를 두고 상태를 바꿉니다.
-                                      Future.delayed(const Duration(milliseconds: 100), () {
-                                        setState(() {
-                                          _isChatActive = false;
-                                        });
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(width: 5),
-                                  const Text(
-                                    'AI 맛잘알 챗봇 🤖',
-                                    style: TextStyle(
-                                      fontSize: 18, 
-                                      fontWeight: FontWeight.bold, 
-                                      color: AppColors.textPrimary
+                    onTap: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => _isChatActive = false);
+                    },
+                    child: AnimatedContainer( // ✨ Container를 AnimatedContainer로 변경!
+                      duration: const Duration(milliseconds: 250), // 키보드 올라오는 속도와 맞춤
+                      curve: Curves.easeOut,
+                      color: Colors.transparent,
+                      // ✨ 2. [핵심] 키보드가 올라온 높이(viewInsets.bottom)만큼만 아래 여백을 줘서 채팅창을 위로 밀어 올림!
+                      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                      alignment: const Alignment(0, -0.25), 
+                      child: GestureDetector(
+                        onTap: () {}, 
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            maxWidth: 420, 
+                            maxHeight: 550, 
+                          ),
+                          width: MediaQuery.of(context).size.width * 0.92, 
+                          height: MediaQuery.of(context).size.height * 0.55, 
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, spreadRadius: 3)
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              // 1. 헤더 
+                              Container(
+                                height: 50,
+                                padding: const EdgeInsets.symmetric(horizontal: 15),
+                                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('AI 맛잘알 챗봇 🤖', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                    IconButton(
+                                      icon: const Icon(Icons.close, color: AppColors.textPrimary, size: 22),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(), 
+                                      onPressed: () {
+                                        FocusManager.instance.primaryFocus?.unfocus();
+                                        setState(() => _isChatActive = false);
+                                      },
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            
-                            // 2. 기존 채팅 메시지 리스트
-                            Expanded(
-                              child: ListView.builder(
-                                reverse: true, 
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                                itemCount: _chatMessages.length,
-                                itemBuilder: (context, index) {
-                                  String msg = _chatMessages[_chatMessages.length - 1 - index];
-                                  bool isMe = msg.startsWith("USER:");
-
-                                  return Align(
-                                    alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                                    child: Container(
-                                      margin: const EdgeInsets.only(bottom: 15),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: isMe ? AppColors.primary : Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(20).copyWith(
-                                          bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(20),
-                                          bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(20),
+                              
+                              // 2. 메시지 리스트
+                              Expanded(
+                                child: ListView.builder(
+                                  reverse: true, 
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: _chatMessages.length,
+                                  itemBuilder: (context, index) {
+                                    String msg = _chatMessages[_chatMessages.length - 1 - index];
+                                    bool isMe = msg.startsWith("USER:");
+                                    return Align(
+                                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: isMe ? AppColors.primary : Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(15).copyWith(
+                                            bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                                            bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(15),
+                                          ),
+                                        ),
+                                        child: Text(msg.replaceAll("USER:", "").replaceAll("BOT:", ""), style: TextStyle(color: isMe ? Colors.white : AppColors.textPrimary, fontSize: 14)),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              
+                              // 3. 채팅 입력창 
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Container(
+                                        height: 45, 
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+                                        child: TextField(
+                                          controller: _chatInputController,
+                                          focusNode: _chatFocusNode,
+                                          style: const TextStyle(fontSize: 14),
+                                          onSubmitted: (text) => _sendMessage(text),
+                                          decoration: const InputDecoration(
+                                            isDense: true,
+                                            contentPadding: EdgeInsets.symmetric(vertical: 12),
+                                            hintText: '맛집을 물어보세요!', 
+                                            hintStyle: TextStyle(fontSize: 14), 
+                                            border: InputBorder.none
+                                          ),
                                         ),
                                       ),
-                                      child: Text(
-                                        msg.replaceAll("USER:", "").replaceAll("BOT:", ""),
-                                        style: TextStyle(color: isMe ? Colors.white : AppColors.textPrimary),
-                                      ),
                                     ),
-                                  );
-                                },
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => _sendMessage(_chatInputController.text),
+                                      child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle), child: const Icon(Icons.send, color: Colors.white, size: 18)),
+                                    )
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),  
+                ),
               ),
 
-              // 6층: 진짜 텍스트를 입력할 수 있는 하단 챗봇 버튼
-              Positioned(
-                bottom: 40, left: 20, right: 20,
-
+              // 6층: 우측 하단 동그란 챗봇 열기 버튼
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                bottom: _isChatActive ? -100 : 40, 
+                right: 20,
                 child: PointerInterceptor(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(30), boxShadow:[BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))], border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1)),
-                    child: Row(
-                      children:[
-                        const SizedBox(width: 10), const Icon(Icons.smart_toy, color: AppColors.primary), const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _chatInputController,
-                            focusNode: _chatFocusNode, // 포커스 노드 연결
-                            readOnly: false,
-                            onTap: () {
-                              setState(() {
-                                _isChatActive = true;
-                              });
-                            },
-                            onSubmitted: (text) => _sendMessage(text),
-                            decoration: const InputDecoration(hintText: '어디 가고 싶으세요? 맛집 추천해드릴게요!', hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13), border: InputBorder.none),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => _sendMessage(_chatInputController.text),
-                          child: Container(padding: const EdgeInsets.all(10), margin: const EdgeInsets.only(left: 5), decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle), child: const Icon(Icons.send, color: AppColors.background, size: 18)),
-                        )
-                      ],
-                    ),
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      setState(() { _isChatActive = true; });
+                      Future.delayed(const Duration(milliseconds: 400), () => _chatFocusNode.requestFocus());
+                    },
+                    backgroundColor: AppColors.primary,
+                    elevation: 5,
+                    child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
                   ),
                 ),
               ),
               // *9번 여기까지*
-            ],
-          ),
-        ),  
-    );
-  }
-}
+            ], // Stack children 닫기
+          ), // Stack 닫기
+        ), // SafeArea 닫기
+    ); // Scaffold 닫기
+  } // build 메서드 닫기
+} // _MainScreenState 클래스 닫기
