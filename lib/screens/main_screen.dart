@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/gestures.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/location_service.dart';
 import '../models/restaurant.dart';
@@ -433,60 +434,57 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
 // *변경 코드6*
     Widget buildSheetHeader(int count) {
-      final categoryWidgets = [
-        CategoryItem(title: '한식', isSelected: selectedCategory == '한식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('한식')),
-        CategoryItem(title: '양식', isSelected: selectedCategory == '양식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('양식')),
-        CategoryItem(title: '중식', isSelected: selectedCategory == '중식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('중식')),
-        CategoryItem(title: '일식', isSelected: selectedCategory == '일식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('일식')),
-        CategoryItem(title: '아시안', isSelected: selectedCategory == '아시안', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('아시안')),
-        CategoryItem(title: '멕시칸', isSelected: selectedCategory == '멕시칸', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('멕시칸')),
-        CategoryItem(title: '분식', isSelected: selectedCategory == '분식', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('분식')),
-        CategoryItem(title: '카페·디저트', isSelected: selectedCategory == '카페·디저트', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('카페·디저트')),
-        CategoryItem(title: '치킨', isSelected: selectedCategory == '치킨', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('치킨')),
-        CategoryItem(title: '피자·버거', isSelected: selectedCategory == '피자·버거', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('피자·버거')),
-        CategoryItem(title: '고기·구이', isSelected: selectedCategory == '고기·구이', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('고기·구이')),
-        CategoryItem(title: '술집', isSelected: selectedCategory == '술집', onTap: () => ref.read(categoryProvider.notifier).toggleCategory('술집')),
+      final categoryNames = [
+        '한식', '중식', '일식', '양식', '분식', '패스트푸드', '아시안', '멕시칸', '카페',
+        '고깃집', '돼지갈비', '소고기', '한우', '보쌈', '닭갈비',
+        '초밥', '돈카츠', '사케동', '일본가정식', '일식당', '해산물',
+        '짬뽕', '칼국수', '막국수', '소바', '메밀칼국수', '면요리', '만두', '군만두',
+        '설렁탕', '순두부', '알탕', '곤이', '옹심이', '국물요리',
+        '밥집', '한정식', '보리밥정식', '나물',
+        '빵', '브런치', '이탈리안', '태국음식', '베트남음식', '뷔페',
+        '술집'
       ];
+
+      final categoryWidgets = categoryNames.map((name) {
+        return CategoryItem(
+          title: name,
+          isSelected: selectedCategory == name,
+          onTap: () => ref.read(categoryProvider.notifier).toggleCategory(name)
+        );
+      }).toList();
 
       return GestureDetector(
         onVerticalDragUpdate: (details) {
           final screenHeight = MediaQuery.of(context).size.height;
           double newSize = _sheetController.size - (details.primaryDelta! / screenHeight);
-          // 최소 높이 0.22로 다시 복구!
           _sheetController.jumpTo(newSize.clamp(0.22, 0.87));
+
+          // ✨ 안전장치 1: 바텀시트를 밑으로 끌어내리면 열려있던 카테고리를 즉시 닫아서 터짐 방지!
+          if (details.primaryDelta! > 0 && _isCategoryExpanded) {
+            setState(() { _isCategoryExpanded = false; });
+          }
         },
         onVerticalDragEnd: (details) {
           final currentSize = _sheetController.size;
-          // ✨ 잃어버렸던 스와이프 속도(velocity) 감지 로직 완벽 복구!!
           final velocity = details.primaryVelocity ?? 0;
 
-          // 위로 아주 살짝만(툭!) 스와이프 했을 때
           if (velocity < -100) {
-            _sheetController.animateTo(
-              0.87, 
-              duration: const Duration(milliseconds: 250), 
-              curve: Curves.easeOutQuart,
-            );
-          } 
-          // 아래로 아주 살짝만(툭!) 스와이프 했을 때
-          else if (velocity > 100) {
-            _sheetController.animateTo(
-              0.22, 
-              duration: const Duration(milliseconds: 250), 
-              curve: Curves.easeOutQuart,
-            );
-          } 
-          // 천천히 움직이다 놓았을 때만 자석처럼 붙기
-          else {
+            _sheetController.animateTo(0.87, duration: const Duration(milliseconds: 250), curve: Curves.easeOutQuart);
+          } else if (velocity > 100) {
+            // ✨ 안전장치 2: 휙! 하고 아래로 스와이프해서 닫을 때도 카테고리 창 자동 닫기
+            if (_isCategoryExpanded) {
+              setState(() { _isCategoryExpanded = false; });
+            }
+            _sheetController.animateTo(0.22, duration: const Duration(milliseconds: 250), curve: Curves.easeOutQuart);
+          } else {
             const snapSizes = [0.22, 0.45, 0.87]; 
-            double closest = snapSizes.reduce((a, b) => 
-              (a - currentSize).abs() < (b - currentSize).abs() ? a : b
-            );
-            _sheetController.animateTo(
-              closest,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutQuart,
-            );
+            double closest = snapSizes.reduce((a, b) => (a - currentSize).abs() < (b - currentSize).abs() ? a : b);
+            
+            // ✨ 안전장치 3: 어중간한 높이(0.45)나 아래(0.22)에 멈춰설 때도 자동 닫기
+            if (closest != 0.87 && _isCategoryExpanded) {
+              setState(() { _isCategoryExpanded = false; });
+            }
+            _sheetController.animateTo(closest, duration: const Duration(milliseconds: 250), curve: Curves.easeOutQuart);
           }
         },
         child: Container(
@@ -503,7 +501,6 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children:[
-                    // 왼쪽: 타이틀
                     Text(
                       _isKeepMode 
                           ? 'keep list 💖' 
@@ -511,7 +508,6 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)
                     ),
                     
-                    // 오른쪽: 개수 + 화살표 애니메이션 버튼
                     Row(
                       children: [
                         Text('총 $count곳', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary.withOpacity(0.7))),
@@ -521,6 +517,10 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                             setState(() {
                               _isCategoryExpanded = !_isCategoryExpanded;
                             });
+                            // 열릴 때는 무조건 넓은 0.87 높이로 강제 확장!
+                            if (_isCategoryExpanded && _sheetController.isAttached) {
+                              _sheetController.animateTo(0.87, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+                            }
                           },
                           child: AnimatedRotation(
                             turns: _isCategoryExpanded ? 0.5 : 0.0, 
@@ -551,20 +551,32 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                 firstChild: Container(
                   padding: const EdgeInsets.only(bottom: 15),
                   width: double.infinity,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(children: categoryWidgets),
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(children: categoryWidgets),
+                    ),
                   ),
                 ),
                 
                 secondChild: Container(
+                  // ✨ 안전장치 4: 고정 높이 250px를 버리고 화면 높이에 맞춰 쪼그라들게 만듦! (100px 밑으로는 안 떨어짐)
+                  constraints: BoxConstraints(
+                    maxHeight: (MediaQuery.of(context).size.height * 0.3).clamp(100.0, 180.0)
+                  ),
                   padding: const EdgeInsets.only(left: 20, right: 20, bottom: 15),
                   width: double.infinity,
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: categoryWidgets,
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: categoryWidgets,
+                    ),
                   ),
                 ),
               ),
@@ -576,7 +588,6 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
       );
     }
     // *여기까지 6번*
- 
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
