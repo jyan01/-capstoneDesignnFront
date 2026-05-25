@@ -159,28 +159,30 @@
       restaurants.forEach(function(res) {
         var markerPosition = new kakao.maps.LatLng(res.latitude, res.longitude);
         
-        // 금/은/동 바탕색 결정
-        var outerColor = "#FFC107"; // 기본 금색
-        if (res.bestGrade === "silver") outerColor = "#9E9E9E"; // 은색
-        if (res.bestGrade === "bronze") outerColor = "#CD7F32"; // 동색
+        var imageUrl = '';
+        
+        // 1. 순위에 따라 이미지 경로 설정 (파일명은 저장하신 대로 맞춰주세요)
+        if (res.bestGrade === "gold") {
+          imageUrl = './icons/Gold_pin.png';     // 🥇 금메달 핀
+        } else if (res.bestGrade === "silver") {
+          imageUrl = './icons/Silver_pin.png';   // 🥈 은메달 핀
+        } else {
+          // 금, 은이 아니라면 무조건 3등(동메달) 핀으로 꽂아버립니다!
+          imageUrl = './icons/Bronze_pin.png';   // 🥉 동메달 핀
+        }
 
-        // ✨ 선택된 핀이면 크기를 1.3배 키우고, 안쪽 동그라미를 빨간색으로!
+        // 2. 선택된 핀 효과 주기 (선택 시 크기를 1.3배 확 키워줍니다!)
         var scale = res.isSelected ? 1.3 : 1.0;
-        var innerColor = res.isSelected ? "#FF3B30" : "#FFFFFF"; 
-
-        var width = 30 * scale;
+        
+        // 3. 이미지 크기 설정 (자르신 이미지 크기에 맞춰 숫자를 조절해 주세요. 보통 가로 40, 세로 50이 적당합니다.)
+        var width = 28 * scale;
         var height = 40 * scale;
 
-        // 예쁜 물방울 모양 맵 핀 SVG 코드를 실시간으로 찍어냅니다
-        var svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 30 40">
-            <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 25 15 25s15-13.8 15-25C30 6.7 23.3 0 15 0z" fill="${outerColor}" stroke="#ffffff" stroke-width="2"/>
-            <circle cx="15" cy="15" r="6" fill="${innerColor}"/>
-        </svg>`;
-
+        // 4. 마커 이미지 생성!
         var markerImage = new kakao.maps.MarkerImage(
-          "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIcon),
+          imageUrl,
           new kakao.maps.Size(width, height),
-          {offset: new kakao.maps.Point(width / 2, height)}
+          {offset: new kakao.maps.Point(width / 2, height)} // 뾰족한 끝이 좌표에 닿도록 중심점 설정
         );
 
         var marker = new kakao.maps.Marker({
