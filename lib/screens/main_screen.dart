@@ -1033,7 +1033,34 @@ Widget _buildRankingMarker(Restaurant restaurant, double top, double left, Color
                                                         }
                                                       },
                                                       title: Text(restaurant.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                                      subtitle: Text('⭐ ${restaurant.rating}', style: const TextStyle(color: AppColors.textSecondary)), 
+                                                      // 1. 식당 이름
+                                                  
+                                                      
+                                                      // 2. ✨ 별점 대신 들어가는 프리미엄 메달 UI ✨
+                                                      
+                                                      subtitle: Padding(
+                                                        padding: const EdgeInsets.only(top: 4.0), 
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              restaurant.bestGrade.toUpperCase() == 'GOLD' ? '🥇' : 
+                                                              restaurant.bestGrade.toUpperCase() == 'SILVER' ? '🥈' : 
+                                                              restaurant.bestGrade.toUpperCase() == 'BRONZE' ? '🥉' : '🏅',
+       
+                                                              style: const TextStyle(fontSize: 14),
+                                                            ),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              restaurant.bestGrade.toUpperCase(), 
+                                                              style: const TextStyle(
+                                                                color: AppColors.textSecondary, 
+                                                                fontWeight: FontWeight.w600, 
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
                                                       trailing: IconButton(
                                                         icon: Icon(restaurant.isFavorite ? Icons.favorite : Icons.favorite_border, color: restaurant.isFavorite ? AppColors.error : AppColors.divider), 
                                                         onPressed: () => ref.read(restaurantProvider.notifier).toggleFavorite(restaurant.id)

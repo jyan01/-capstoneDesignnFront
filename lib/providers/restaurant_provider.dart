@@ -64,7 +64,7 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
     }
 
     // 가장 가까운 순서대로 정렬
-    list.sort((a, b) => a.distance.compareTo(b.distance));
+    //list.sort((a, b) => a.distance.compareTo(b.distance));
 
     // 🗺️ [수정] 지도에 마커를 꽂을 때 '이름'과 백엔드에서 받은 '금은동 등급'도 함께 조각내어 보냅니다!
     final markerData = list.map((r) => {
@@ -111,10 +111,29 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((ref)
 
   return asyncRestaurants.whenData((restaurants) {
     return restaurants.where((r) {
-      // 필터 1: 카테고리 일치 여부 (Getter 변수인 r.category 활용)
-      if (category.isNotEmpty && r.category != category) return false;
+      // 🌟 필터 1: 카테고리 일치 여부 (그룹 필터링 적용 완료 ✨)
+      if (category.isNotEmpty) {
+        // 🚀 대분류 <-> 소분류 매핑 그룹 사전
+        final categoryGroups = {
+          '일식': ['일식', '초밥', '돈카츠', '사케동', '일본가정식', '일식당', '소바', '해산물'],
+          '한식': ['한식', '막국수', '보리밥정식', '옹심이', '닭갈비', '알탕', '나물', '곤이', '돼지갈비', '한우', '칼국수', '소고기', '한정식', '설렁탕', '순두부', '메밀칼국수', '보쌈', '밥집', '고깃집', '국물요리'],
+          '중식': ['중식', '짬뽕', '만두', '군만두'],
+          '양식': ['양식', '브런치', '이탈리안', '패스트푸드', '멕시칸'],
+          '분식': ['분식'],
+          '카페': ['카페', '핸드드립', '빵'],
+          '아시안': ['아시안', '태국음식', '베트남음식'],
+        };
+
+        if (categoryGroups.containsKey(category)) {
+          // ☝️ '일식' 같은 대분류 버튼을 눌렀을 때 -> 해당 소분류 리스트에 식당의 카테고리가 포함되는지 확인!
+          if (!categoryGroups[category]!.contains(r.category)) return false;
+        } else {
+          // ✌️ '초밥' 같은 세부 단일 버튼을 눌렀을 때 -> 정확히 일치하는 것만 확인!
+          if (r.category != category) return false;
+        }
+      }
       
-      // 필터 2: 검색어 포함 여부
+      // 필터 2: 검색어 포함 여부 (기존 로직 유지)
       if (searchQuery.isNotEmpty) {
         final query = searchQuery.toLowerCase().replaceAll(' ', '');
         final name = r.name.toLowerCase().replaceAll(' ', '');
@@ -124,7 +143,6 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((ref)
     }).toList();
   });
 });
-
 
 // ─── 5. 찜한 식당만 필터링 (바텀시트 내 킵 모드 및 기존 보관함 UI용) ───
 final favoriteRestaurantsProvider = Provider<List<Restaurant>>((ref) {
